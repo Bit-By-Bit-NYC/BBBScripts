@@ -1,0 +1,1 @@
+Return (Get-WmiObject -Class Win32_Product -Filter "Name LIKE '%AD Connect' OR Name LIKE '%Entra Connect Sync'").Version
