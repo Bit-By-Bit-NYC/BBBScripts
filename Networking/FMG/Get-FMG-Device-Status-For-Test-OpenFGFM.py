@@ -3,6 +3,7 @@ import requests
 from colorama import Fore, Style, init
 import urllib3
 import re
+import os
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -15,11 +16,12 @@ NON_RFC1918_REGEX = re.compile(
     r"^(?!10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|255\.|0\.0\.0\.0|169\.).*"
 )
 
-def load_config(file_path="./config.txt"):
+def load_config(file_path="./Networking/FMG/config.txt"):
     """
     Load FortiManager connection details from a config file.
     """
     config = {}
+    print("Current Working Directory:", os.getcwd())
     with open(file_path, "r") as file:
         for line in file:
             key, value = line.strip().split("=", 1)

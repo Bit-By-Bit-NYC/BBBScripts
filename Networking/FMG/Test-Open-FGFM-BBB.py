@@ -58,8 +58,8 @@ def process_csv(input_csv, output_csv, port=541):
     print(f"{Fore.CYAN}Results have been saved to {output_csv}")
 
 def main():
-    input_csv = "non_rfc1918_ips.csv"  # Input from the previous script
-    output_csv = "port_541_test_results.csv"  # Output CSV file for port 541 test results
+    input_csv = "./Networking/FMG/non_rfc1918_ips.csv"  # Input from the previous script
+    output_csv = "./Networking/FMG/port_541_test_results.csv"  # Output CSV file for port 541 test results
     process_csv(input_csv, output_csv)
 
 if __name__ == "__main__":
