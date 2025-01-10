@@ -48,7 +48,7 @@ function WaitForHostOnline {
     while ($true) {
         try {
             $nodeStatus = Get-ClusterNode -Cluster $ClusterName -Name $NodeName
-            if ($nodeStatus.State -eq 'Up') {
+               if ($nodeStatus.State -in @('Up', 'Paused')) {
                 Write-Output "$NodeName is back online."
                 break
             } else {
