@@ -11,8 +11,8 @@ init(autoreset=True)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configuration and script file paths
-CONFIG_FILE = "config.txt"
-SCRIPT_FILE = "script_to_upload.txt"
+CONFIG_FILE = "C:\\Users\\gpetrillo\\OneDrive - Bit By Bit Computer Consultants\\Desktop\\scripts\\fmg\\config.txt"
+SCRIPT_FILE = "C:\\Users\\gpetrillo\\OneDrive - Bit By Bit Computer Consultants\Desktop\\scripts\\fmg\\script_to_upload.txt"
 
 def read_config(file_path):
     """Read FortiManager configuration from a text file."""
@@ -113,7 +113,7 @@ def main():
             elif upload_response["result"][0]["status"]["message"] == "Object already exists":
                 print(f"{Fore.GREEN}Script already exists in ADOM: {adom}.")
             else:
-                print(f"{Fore.RED}Failed to upload script to ADOM: {adom} - Error Message: {upload_response["result"][0]["status"]["message"]}")
+                print(f'{Fore.RED}Failed to upload script to ADOM: {adom} - Error Message: {upload_response["result"][0]["status"]["message"]}')
                 continue
 
             # Get list of devices in the ADOM
@@ -125,7 +125,7 @@ def main():
 
             
             if True:
-                # Execute script on each device
+                # Execute script on each device, delete
                 # 20241204- Need to execute it against the local device as well as to the database so it is included in the next push
                 for device in devices:
                     device_name = device["name"]
@@ -145,10 +145,9 @@ def main():
                         print(f"{Fore.GREEN}Script executed successfully on device: {device_name}")
                     else:
                         print(f"{Fore.RED}Failed to execute script on device: {device_name}")
-
-
-                # Delete the script after execution on all devices in the ADOM
-                """print(f"{Fore.CYAN}Deleting script {SCRIPT_NAME} from ADOM: {adom}...")
+                
+                """# Delete the script after execution on all devices in the ADOM
+                print(f"{Fore.CYAN}Deleting script {SCRIPT_NAME} from ADOM: {adom}...")
                 delete_params = [{
                     "url": f"/dvmdb/adom/{adom}/script/{SCRIPT_NAME}", # Correct URL for delete
                     "data": {} # Delete requests often don't require a body, but include an empty data dict for consistency. 
@@ -159,6 +158,7 @@ def main():
                     print(f"{Fore.GREEN}Script {SCRIPT_NAME} deleted successfully from ADOM: {adom}.")
                 else:
                     print(f"{Fore.RED}Failed to delete script {SCRIPT_NAME} from ADOM: {adom}. Error: {delete_response['result'][0]['status']['message']}")"""
+
 
         # Logout
         print(f"\n{Fore.CYAN}Logging out...")
