@@ -64,7 +64,12 @@ Write-Host "`nConnected as AppId: $($whoami.ClientId) against Tenant: $($whoami.
 # --- Pull User Information ---
 Write-Host "`nPulling users from Entra ID (Azure AD)...`n"
 
-$allUsers = Get-MgUser -All -Property DisplayName, UserPrincipalName, AssignedLicenses
+#$allUsers = Get-MgUser -All -Property DisplayName, UserPrincipalName, AssignedLicenses
+
+
+$allUsers = Get-MgUser -All -Property DisplayName, UserPrincipalName, AssignedLicenses, SignInActivity
+
+
 
 # --- SKU Mapping Table (Expand as Needed) ---
 $skuMap = @{
@@ -136,6 +141,7 @@ foreach ($user in $allUsers) {
         UserPrincipalName = $user.UserPrincipalName
         IsPARIO           = $isPario
         CurrentLicenses   = ($licenseNames -join "; ")
+        LastSignInDate    = if ($user.SignInActivity.LastSignInDateTime) { [datetime]$user.SignInActivity.LastSignInDateTime | Get-Date -Format "yyyy-MM-dd HH:mm:ss" } else { "" }
     }
 }
 
