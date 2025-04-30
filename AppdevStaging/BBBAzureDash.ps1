@@ -15,13 +15,15 @@ $appNames = @("BBB MS Licensing", "BBB MS Reboot", "BBB MS Patch")
 # --- MANUALLY BUILT TENANTS LIST ---
 $tenants = @{
     "1" = @{ Name = "Bit By Bit Computer Consultants"; Id = "27f318ae-79fe-4219-aa14-689300d7365c" }
-    "2" = @{ Name = "SeniorCare"; Id = "b550b5ea-7463-4810-b74c-43617d8335d1" }
+    "2" = @{ Name = "SeniorCare"; Id = "6e35e8df-159a-4d3a-8d09-687ad995e311" }
+    "3" = @{ Name = "Daniel H Cook and Associates"; Id = "6a56dc62-92c4-461a-b932-bb35887b2c80" }
     # Add rest of your tenants here...
 }
 
 # --- USER PROMPT FOR CLIENT SECRET ---
-$ClientSecret = Read-Host "Enter client secret for the Service Principal" -AsSecureString
-$PlainClientSecret = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($ClientSecret))
+$PlainClientSecret = Read-Host "Enter client secret for the Service Principal"
+
+Write-Host "`nAuthenticating with Azure CLI (Service Principal)..."
 
 # --- RESULTS HOLDER ---
 $results = @()
@@ -31,26 +33,44 @@ foreach ($key in ($tenants.Keys | Sort-Object)) {
     $tenant = $tenants[$key]
     Write-Host "\nChecking Tenant: $($tenant.Name) ($($tenant.Id))..." -ForegroundColor Cyan
 
-    # Set environment variables for Service Principal authentication
-    $env:AZURE_CLIENT_ID = $ClientId
-    $env:AZURE_TENANT_ID = $tenant.Id
-    $env:AZURE_CLIENT_SECRET = $PlainClientSecret
 
     # Connect to Microsoft Graph
     try {
         Disconnect-MgGraph -ErrorAction SilentlyContinue
-        Connect-MgGraph -Identity -Scopes "https://graph.microsoft.com/.default" -ErrorAction Stop
+
+        # Explicit login to each tenant
+        az logout | Out-Null
+
+        $azLogin = az login --service-principal -u $ClientId -p $PlainClientSecret --tenant $($tenant.Id) --allow-no-subscriptions | ConvertFrom-Json
+
+        if (-not $azLogin) {
+            throw "Failed Azure CLI login for $($tenant.Name)"
+        }
+
+        # Get access token after logging in
+        $accessToken = az account get-access-token --resource https://graph.microsoft.com --query accessToken -o tsv
+
+        if (-not $accessToken) {
+            throw "Failed to retrieve access token for $($tenant.Name)"
+        }
+
+        $secureToken = ConvertTo-SecureString -String $accessToken -AsPlainText -Force
+        Connect-MgGraph -AccessToken $secureToken -NoWelcome
+
+        Write-Host "Connected successfully to $($tenant.Name)" -ForegroundColor Green
         $connected = $true
     }
     catch {
-        Write-Host "Failed to connect to tenant." -ForegroundColor Red
+        Write-Host "❌ Failed to connect to $($tenant.Name)" -ForegroundColor Red
+        Write-Host "Reason: $($_.Exception.Message)" -ForegroundColor Yellow
         $connected = $false
     }
 
     # Initialize checks
     $licenseStatus = "N/A"
-    $rebootStatus = "N/A"
-    $patchStatus = "N/A"
+    $licensingApp = "N/A"
+    $rebootApp = "N/A"
+    $patchApp = "N/A"
     $overallStatus = "❌ Error"
 
     if ($connected) {
@@ -63,22 +83,33 @@ foreach ($key in ($tenants.Keys | Sort-Object)) {
             $licenseStatus = "🔴"
         }
 
-        # Check if Service Principals exist
-        foreach ($app in $appNames) {
-            try {
-                $sp = Get-MgServicePrincipal -Filter "displayName eq '$app'" -Top 1 -ErrorAction Stop
-                if ($sp) {
-                    if ($app -eq "BBB MS Licensing") { $licensingApp = "🟢" }
-                    elseif ($app -eq "BBB MS Reboot") { $rebootApp = "🟢" }
-                    elseif ($app -eq "BBB MS Patch") { $patchApp = "🟢" }
-                }
-            }
-            catch {
-                if ($app -eq "BBB MS Licensing") { $licensingApp = "🔴" }
-                elseif ($app -eq "BBB MS Reboot") { $rebootApp = "🔴" }
-                elseif ($app -eq "BBB MS Patch") { $patchApp = "🔴" }
+        # Check permission claims from context
+        $appHealth = @{
+            LicensingApp = "❌"
+            RebootApp    = "❌"
+            PatchApp     = "❌"
+        }
+
+        try {
+            $context = Get-MgContext
+            $scopes = $context.Scopes
+
+            Write-Host "`n🔍 DEBUG: Connected to $($tenant.Name)" -ForegroundColor Yellow
+            Write-Host "Scopes in context:" -ForegroundColor Yellow
+            $scopes | ForEach-Object { Write-Host " - $_" -ForegroundColor DarkYellow }
+
+            if ("Directory.Read.All" -in $scopes) { $appHealth["LicensingApp"] = "🟢" }
+            if ("AuditLog.Read.All" -in $scopes) {
+                $appHealth["RebootApp"] = "🟢"
+                $appHealth["PatchApp"] = "🟢"
             }
         }
+        catch {
+            Write-Host "⚠️ Could not retrieve context scopes in $($tenant.Name)" -ForegroundColor Yellow
+        }
+        $licensingApp = $appHealth["LicensingApp"]
+        $rebootApp    = $appHealth["RebootApp"]
+        $patchApp     = $appHealth["PatchApp"]
 
         # Determine overall status
         if ($licenseStatus -eq "🟢" -and $licensingApp -eq "🟢" -and $rebootApp -eq "🟢" -and $patchApp -eq "🟢") {
