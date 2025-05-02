@@ -1,33 +1,28 @@
 using namespace System.Net
 
-
 param($Request, $TriggerMetadata)
 
-
-try {
-    Import-Module Az.Accounts -ErrorAction Stop
-    Write-Host "✅ Az.Accounts module loaded successfully."
-}
-catch {
-    Write-Host "❌ ERROR: Failed to import Az.Accounts: $($_.Exception.Message)"
-    return @{
-        StatusCode = [HttpStatusCode]::InternalServerError
-        Headers = @{ "Content-Type" = "application/json" }
-        Body = "Internal Server Error: Failed to load Az.Accounts"
-    }
-}
-
+Import-Module Az.Accounts
 
 try {
     Write-Host "🔐 Starting token acquisition..."
-    $token = (Get-AzAccessToken -ResourceUrl "https://database.windows.net/").Token
-    Write-Host "✅ Access token acquired: $($token.Substring(0,20))..."
+    Add-Type -AssemblyName "System.Data"
+
+    try {
+        $accessToken = (Get-AzAccessToken -ResourceUrl "https://database.windows.net/").Token
+        Write-Host "✅ Access token acquired via Get-AzAccessToken"
+    }
+    catch {
+        Write-Host "❌ Failed to acquire token via Get-AzAccessToken: $($_.Exception.Message)"
+        throw
+    }
 
     $connectionString = "Server=tcp:bbbai.database.windows.net,1433;Initial Catalog=bbbazuredb;"
     Write-Host "🔌 Opening SQL connection to bbbazuredb..."
+    Write-Host "🔑 Using token of length $($accessToken.Length)"
     $conn = New-Object System.Data.SqlClient.SqlConnection
     $conn.ConnectionString = $connectionString
-    $conn.AccessToken = $token
+    $conn.AccessToken = $accessToken
     $conn.Open()
     Write-Host "✅ SQL connection opened"
 
@@ -60,6 +55,7 @@ try {
 }
 catch {
     Write-Host "❌ ERROR: $($_.Exception.Message)"
+    Write-Host "🧵 Connection string used: $connectionString"
     Write-Host "❌ STACK TRACE: $($_.Exception.StackTrace)"
     return @{
         StatusCode = [HttpStatusCode]::InternalServerError
