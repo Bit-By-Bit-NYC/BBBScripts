@@ -10,6 +10,7 @@
 $tenants = @{
     "1" = @{ Name = "Bit By Bit Computer Consultants"; Id = "27f318ae-79fe-4219-aa14-689300d7365c" }
     "2" = @{ Name = "scemsny.com"; Id = "6e35e8df-159a-4d3a-8d09-687ad995e311" }
+    "3" = @{ Name = "Daniel H Cook and Associates"; Id = "6a56dc62-92c4-461a-b932-bb35887b2c80" }
 }
 
 # --- DISPLAY TENANT OPTIONS ---
@@ -108,6 +109,13 @@ $skuMap = @{
     # Dynamics 365 SKUs (optional if you need)
     "e95bec33-7c88-41ac-9b74-03d2e6045e9f" = "Dynamics 365 Customer Service Enterprise"
     "3fa5cb26-89b1-4393-9374-c67e63f8ee02" = "Dynamics 365 Sales Enterprise"
+
+    # Additional SKUs from DHC
+    "05e9a617-0261-4cee-bb44-138d3ef5d965" = "Microsoft 365 F3"
+    "e43b5b99-8dfb-405f-9987-dc307f3efb6c" = "Microsoft Teams Exploratory"
+    "96d2951e-cb42-4481-9d6d-cad3baaf077b" = "Microsoft Defender for Endpoint P1"
+    "639dec6b-bb19-468b-871c-c5c441c2000e" = "Microsoft Defender for Endpoint P2"
+    "4cde982a-ede4-4409-9ae6-b00345398615" = "Microsoft Power BI (Unverified Plan)"
 }
 
 # --- Build Export List ---

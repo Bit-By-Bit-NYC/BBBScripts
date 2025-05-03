@@ -12,15 +12,26 @@ $ClientId = "7f6d81f7-cbca-400b-95a8-350f8d4a34a1"
 # App Names to Check
 $appNames = @("BBB MS Licensing", "BBB MS Reboot", "BBB MS Patch")
 
-# --- MANUALLY BUILT TENANTS LIST ---
-$tenants = @{
-    "1" = @{ Name = "Bit By Bit Computer Consultants"; Id = "27f318ae-79fe-4219-aa14-689300d7365c" }
-    "2" = @{ Name = "SeniorCare"; Id = "b550b5ea-7463-4810-b74c-43617d8335d1" }
-    # Add rest of your tenants here...
+$functionUrl = "https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=HSq9Mt_Hgd0ISxi7r-5PwGxJ8U-9oPq7EcwGypmCsHzKAzFu7Xlueg=="
+try {
+    $response = Invoke-RestMethod -Uri $functionUrl -Method GET
+    $tenants = @{}
+    $i = 1
+    foreach ($tenant in $response) {
+        $tenants["$i"] = @{ Name = $tenant.TenantName; Id = $tenant.TenantId }
+        $i++
+    }
+} catch {
+    Write-Error "❌ Failed to retrieve tenants: $_"
+    exit
 }
 
 # --- USER PROMPT FOR CLIENT SECRET ---
 $ClientSecret = Read-Host "Enter client secret for the Service Principal" -AsSecureString
+
+
+
+
 $PlainClientSecret = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($ClientSecret))
 
 # --- RESULTS HOLDER ---
