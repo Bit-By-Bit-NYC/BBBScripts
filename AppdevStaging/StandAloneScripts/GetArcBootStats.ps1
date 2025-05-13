@@ -68,6 +68,7 @@ let patchData =
     | where EventLog == "System"
     | where EventID == 19
     | where not(RenderedDescription has "Defender" or RenderedDescription has "Security Intelligence Update")
+    | where RenderedDescription has "Installation Successful: Windows successfully installed the following update" and RenderedDescription has "Cumulative" or RenderedDescription has "Security"
     | extend ComputerName = tolower(Computer)
     | summarize arg_max(TimeGenerated, RenderedDescription, Computer) by ComputerName
     | project ComputerName, LastPatchTime = TimeGenerated, PatchDetails = RenderedDescription, PatchComputer = Computer;

@@ -92,7 +92,8 @@ foreach ($key in ($tenants.Keys | Sort-Object)) {
         }
 
         # Determine overall status
-        if ($licenseStatus -eq "🟢" -and $licensingApp -eq "🟢" -and $rebootApp -eq "🟢" -and $patchApp -eq "🟢") {
+        if ($licenseStatus -eq "🟢" -and $licensingApp -e
+        q "🟢" -and $rebootApp -eq "🟢" -and $patchApp -eq "🟢") {
             $overallStatus = "✅ OK"
         } elseif ($licenseStatus -eq "🟢" -or $licensingApp -eq "🟢" -or $rebootApp -eq "🟢" -or $patchApp -eq "🟢") {
             $overallStatus = "⚠️ Partial"

@@ -7,12 +7,20 @@
 # ==================================================================
 
 # --- CONFIGURATION: Hardcoded Tenants ---
-$tenants = @{
-    "1" = @{ Name = "Bit By Bit Computer Consultants"; Id = "27f318ae-79fe-4219-aa14-689300d7365c" }
-    "2" = @{ Name = "scemsny.com"; Id = "6e35e8df-159a-4d3a-8d09-687ad995e311" }
-    "3" = @{ Name = "Daniel H Cook and Associates"; Id = "6a56dc62-92c4-461a-b932-bb35887b2c80" }
+# --- CONFIGURATION: Pull Tenants from Azure Function ---
+$functionUrl = "https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=HSq9Mt_Hgd0ISxi7r-5PwGxJ8U-9oPq7EcwGypmCsHzKAzFu7Xlueg=="
+try {
+    $response = Invoke-RestMethod -Uri $functionUrl -Method GET
+    $tenants = @{}
+    $i = 1
+    foreach ($tenant in $response) {
+        $tenants["$i"] = @{ Name = $tenant.TenantName; Id = $tenant.TenantId }
+        $i++
+    }
+} catch {
+    Write-Error "❌ Failed to retrieve tenants: $_"
+    exit
 }
-
 # --- DISPLAY TENANT OPTIONS ---
 Write-Host "`nAvailable Tenants:"
 foreach ($key in $tenants.Keys | Sort-Object) {
