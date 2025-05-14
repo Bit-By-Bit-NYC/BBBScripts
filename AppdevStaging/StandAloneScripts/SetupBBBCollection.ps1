@@ -67,9 +67,12 @@ $workspace = New-AzOperationalInsightsWorkspace -Location $location -ResourceGro
 
 # Create the Data Collection Rule (DCR)
 Write-Host "Creating Data Collection Rule: $dcrName..."
+$dcrDataFlow = @{
+    Streams = @("Microsoft-Windows-Event")
+    LogNames = @("System", "Application", "Security")
+}
 $dcr = New-AzMonitorDataCollectionRule -ResourceGroupName $resourceGroupName -Location $location -Name $dcrName -DataFlow @(
-    @{Source = @{Log = @(@{"streams" = @("Microsoft-Windows-Event"), "logNames" = @("System", "Application", "Security")})}; 
-      Destination = @{WorkspaceResourceId = $workspace.ResourceId}}
+    @{Source = $dcrDataFlow; Destination = @{WorkspaceResourceId = $workspace.ResourceId}}
 ) -DataCollectionEndpoint $(Get-AzMonitorDataCollectionEndpoint -Location $location).ResourceId
 
 # Assign the DCR to all resources in the tenant

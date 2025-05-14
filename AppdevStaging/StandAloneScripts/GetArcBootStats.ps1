@@ -20,7 +20,7 @@ foreach ($key in $tenants.Keys | Sort-Object) {
     Write-Host "$key. $($t.Name) [$($t.Id)]"
 }
 
-# --- USER SELECTS TENANT ---
+# --- USER SELECTS TENANT ---2
 [int]$selection = Read-Host "`nSelect a tenant number"
 if (-not $tenants.ContainsKey($selection.ToString())) {
     Write-Error "Invalid selection. Exiting..."
@@ -67,7 +67,7 @@ let patchData =
     Event
     | where EventLog == "System"
     | where EventID == 19
-    | where not(RenderedDescription has "Defender" or RenderedDescription has "Security Intelligence Update")
+    | where not(RenderedDescription has "Defender" or RenderedDescription has "Security Intelligence Update" or RenderedDescription has ".NET Framework")
     | where RenderedDescription has "Installation Successful: Windows successfully installed the following update" and RenderedDescription has "Cumulative" or RenderedDescription has "Security"
     | extend ComputerName = tolower(Computer)
     | summarize arg_max(TimeGenerated, RenderedDescription, Computer) by ComputerName
