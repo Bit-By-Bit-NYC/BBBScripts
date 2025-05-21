@@ -34,7 +34,8 @@ if ($selection -eq "4") {
     $companyName = Read-Host "Enter customer name"
     $companyCode = Read-Host "Enter customer code (short, e.g. XYZ)"
     $ticketNumber = Read-Host "Enter ticket number"
-    $customer = @{ Code = $companyCode; Name = $companyName; Ticket = $ticketNumber; Paths = @((Get-Location).Path) }
+    $customPath = Read-Host "Enter full path to archive (e.g. C:\Data or /Users/you/Documents)"
+    $customer = @{ Code = $companyCode; Name = $companyName; Ticket = $ticketNumber; Paths = @($customPath) }
 } else {
     $customer = $choices[$selection - 1]
     $companyCode = $customer.Code
