@@ -16,6 +16,10 @@ Remove the option to migrate to archive tier; replace with Two copy options - Co
 
 #>
 
+#
+# --- Track Start Time ---
+$startTime = Get-Date
+
 # --- Customer selection ---
  $choices = @(
     @{ Code = "LL"; Name = "London Luxury"; Ticket = "989858"; Paths = @("H:\") },
@@ -181,7 +185,7 @@ if ($scriptMode -eq "3") {
         --account-key $saKey `
         -o tsv
     $azcopyUri = "https://${storageAccount}.blob.core.windows.net/${containerName}?$sasToken"
-    azcopy copy "$rootPath" "$azcopyUri" --recursive=true --block-blob-tier=Archive
+    azcopy copy "$rootPath" "$azcopyUri" --recursive=true --block-blob-tier=Archive --blob-type=BlockBlob
     Log "All uploaded blobs are assigned the Archive tier." "Green"
 
     # --- Tag Blobs ---
@@ -225,6 +229,14 @@ if ($scriptMode -eq "4") {
         Log "Blob '$blob' moved to Archive tier." "Green"
     }
 }
+
+#
+# --- Timing/Logging Section ---
+$endTime = Get-Date
+$elapsed = $endTime - $startTime
+Log "`nStart Time : $startTime"
+Log "End Time   : $endTime"
+Log "Elapsed    : $($elapsed.ToString())"
 
 Log "`n=== Upload Complete for ${companyName} (${ticketNumber}) ===" "Green"
 if ($enableLogging) {
