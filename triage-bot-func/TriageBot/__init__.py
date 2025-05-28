@@ -4,6 +4,7 @@ from openai import AzureOpenAI
 import logging
 import azure.functions as func
 import pyodbc
+from typing import List
 
 # Setup OpenAI configuration
 def get_openai_client():
@@ -13,19 +14,32 @@ def get_openai_client():
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
     )
 
+def get_all_skills() -> List[str]:
+    conn_str = os.getenv("SQL_CONNECTION_STRING")
+    conn = pyodbc.connect(conn_str)
+    cursor = conn.cursor()
+    cursor.execute("SELECT SkillName FROM SkillsList")
+    skills = [row.SkillName for row in cursor.fetchall()]
+    logging.info(f"Loaded {len(skills)} known skills from SkillsList")
+    return skills
+
 # Extract skills and a resolution from the ticket description
-def extract_skills(problem_summary):
+def extract_skills(problem_summary, known_skills):
     client = get_openai_client()
     deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
+    known_skills_json = json.dumps(known_skills)
     prompt = f"""
 You are a helpdesk AI assistant. An end user has submitted the following ticket:
 
 "{problem_summary}"
 
+You must ONLY select skills from this known list:
+{known_skills_json}
+
 Please:
 1. Suggest a one-paragraph fix that an engineer could apply
-2. List the required skills as a JSON array (e.g., ["Outlook", "Azure AD", "Exchange Online"])
+2. List the required skills as a JSON array (e.g., ["Outlook", "Azure AD", "Exchange Online"]) using ONLY the known list
 3. Explain briefly why each skill is needed
 4. Suggest the top 3 most qualified engineers for this ticket based on the provided skills matrix
 
@@ -104,18 +118,28 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         logging.info(f"AZURE_OPENAI_ENDPOINT: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
         logging.info(f"AZURE_OPENAI_DEPLOYMENT: {os.getenv('AZURE_OPENAI_DEPLOYMENT')}")
         logging.info(f"AZURE_OPENAI_VERSION: {os.getenv('AZURE_OPENAI_VERSION')}")
-        skills, resolution, top_engineers = extract_skills(problem)
+
+        known_skills = get_all_skills()
+        skills, resolution, top_engineers = extract_skills(problem, known_skills)
         engineers = get_top_engineers(skills)
         logging.info(f"Top engineers from DB: {engineers}")
 
+        if not engineers:
+            logging.warning("No engineers found matching the required skills.")
+        else:
+            logging.info("Recommended Engineers:")
+            for eng in engineers:
+                logging.info(f"{eng['name']}: {eng['explanation']}")
+
+        result = {
+            "problem_summary": problem,
+            "resolution": resolution,
+            "skills_matched": skills,
+            "recommended_engineers": engineers
+        }
+        logging.info("Returning result: " + json.dumps(result, indent=2))
         return func.HttpResponse(
-            json.dumps({
-                "problem_summary": problem,
-                "resolution": resolution,
-                "skills_matched": skills,
-                "recommended_engineers": engineers,
-                "llm_recommended_engineers": top_engineers
-            }),
+            json.dumps(result),
             status_code=200,
             mimetype="application/json"
         )
