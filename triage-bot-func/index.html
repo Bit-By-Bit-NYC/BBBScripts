@@ -27,7 +27,7 @@
       
 
       try {
-        const res = await fetch("http://localhost:7071/api/triage", {
+        const res = await fetch("https://triage-bot-func.azurewebsites.net/api/triage?code=c6pDCuLBfHmbltEdTlWviJ_eVRZFeUqDo3Dg9aJAg2GWAzFuDjUJpw==", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ problem_summary: problem })
