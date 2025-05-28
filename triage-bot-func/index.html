@@ -2,17 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Local Triage Bot Tester</title>
+  <title>Bit By Bit Helpdesk</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 2rem; }
     textarea, pre { width: 100%; box-sizing: border-box; }
     textarea { height: 120px; font-family: monospace; }
     pre { background: #f4f4f4; padding: 1rem; white-space: pre-wrap; border: 1px solid #ccc; }
     button { padding: 0.5rem 1rem; margin-top: 1rem; }
+    body {
+      background-color: #f2f4f8;
+      color: #333;
+    }
+    button {
+      background-color: #0056a3;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #004080;
+    }
+    textarea, pre {
+      border: 1px solid #ccc;
+    }
   </style>
 </head>
 <body>
-  <h1>Test Local Helpdesk Triage Bot</h1>
+  <h1 style="color:#0056a3;">Bit By Bit Helpdesk</h1>
   <label for="problem">Problem Summary:</label><br>
   <textarea id="problem"></textarea><br>
   <button onclick="submitProblem()">Submit to Local Bot</button>
