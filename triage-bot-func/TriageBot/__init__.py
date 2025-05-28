@@ -1,21 +1,22 @@
 import os
 import json
-import openai
+from openai import AzureOpenAI
 import logging
 import azure.functions as func
 import pyodbc
 
 # Setup OpenAI configuration
-def setup_openai():
-    openai.api_type = "azure"
-    openai.api_key = os.getenv("AZURE_OPENAI_KEY")
-    openai.api_base = os.getenv("AZURE_OPENAI_ENDPOINT")
-    openai.api_version = os.getenv("AZURE_OPENAI_VERSION")
-    return os.getenv("AZURE_OPENAI_DEPLOYMENT")
+def get_openai_client():
+    return AzureOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_VERSION"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+    )
 
 # Extract skills and a resolution from the ticket description
 def extract_skills(problem_summary):
-    deployment = setup_openai()
+    client = get_openai_client()
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
     prompt = f"""
 You are a helpdesk AI assistant. An end user has submitted the following ticket:
@@ -41,8 +42,8 @@ TopEngineers:
   - F. Mulyadi: "Well-rounded across all required skills"
 """
 
-    res = openai.ChatCompletion.create(
-        engine=deployment,
+    res = client.chat.completions.create(
+        model=deployment,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2
     )
@@ -83,20 +84,29 @@ def get_top_engineers(skills):
     GROUP BY e.EngineerName
     ORDER BY MatchScore DESC;
     """
+    logging.info(f"Executing SQL query: {query}")
     cursor.execute(query)
+    rows = cursor.fetchall()
+    logging.info(f"Query returned {len(rows)} rows")
     return [{
         "name": row.EngineerName,
         "score": row.MatchScore,
         "explanation": f"{row.EngineerName} scored {row.MatchScore} for the required skills: {', '.join(skills)}"
-    } for row in cursor.fetchall()]
+    } for row in rows]
 
 # Azure Function main entry point
 def main(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json()
         problem = body.get("problem_summary", "")
+        logging.info(f"SQL_CONNECTION_STRING: {os.getenv('SQL_CONNECTION_STRING')}")
+        logging.info(f"AZURE_OPENAI_KEY: {os.getenv('AZURE_OPENAI_KEY')}")
+        logging.info(f"AZURE_OPENAI_ENDPOINT: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
+        logging.info(f"AZURE_OPENAI_DEPLOYMENT: {os.getenv('AZURE_OPENAI_DEPLOYMENT')}")
+        logging.info(f"AZURE_OPENAI_VERSION: {os.getenv('AZURE_OPENAI_VERSION')}")
         skills, resolution, top_engineers = extract_skills(problem)
         engineers = get_top_engineers(skills)
+        logging.info(f"Top engineers from DB: {engineers}")
 
         return func.HttpResponse(
             json.dumps({
