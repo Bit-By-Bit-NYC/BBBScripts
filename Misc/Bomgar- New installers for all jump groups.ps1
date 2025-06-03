@@ -118,7 +118,6 @@ try {
             $installerBody = @{
                 customer_client_start_mode = "hidden"
                 valid_duration             = 525600 # 1 year in minutes
-                name                       = "$($jumpGroup.name)_installer" # Naming convention based on group name
                 jump_group_id              = $jumpGroup.id
                 jump_group_type            = "shared" # Assuming creating shared installers
                 # Add other desired properties from the JumpClientInstaller schema here if needed
