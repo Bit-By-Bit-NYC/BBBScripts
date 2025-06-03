@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bit by Bit | Azure VPN Diagnostic CLI Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f5f8fa;
+      margin: 0;
+      padding: 2rem;
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.05);
+    }
+    h1 {
+      color: #1b365d;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.25rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      margin-top: 1.5rem;
+      padding: 0.75rem 1.5rem;
+      background-color: #1b365d;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background-color: #999;
+    }
+    pre {
+      background: #f0f0f0;
+      padding: 1rem;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      margin-top: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Azure VPN Diagnostics CLI Generator</h1>
+    <p>Enter your details below to generate a customized CLI script for enabling Azure VPN Gateway diagnostics. Resources will be tagged with your ticket number.</p>
+
+    <label for="region">Azure Region</label>
+    <select id="region">
+      <option value="">Select a region</option>
+      <option value="eastus">East US</option>
+      <option value="eastus2">East US 2</option>
+      <option value="centralus">Central US</option>
+      <option value="southcentralus">South Central US</option>
+      <option value="westus">West US</option>
+      <option value="westus2">West US 2</option>
+      <option value="westus3">West US 3</option>
+    </select>
+
+    <label for="client">Client Name</label>
+    <input type="text" id="client" placeholder="e.g., htg">
+
+    <label for="ticket">Ticket Number</label>
+    <input type="text" id="ticket" placeholder="Required for tagging">
+
+    <button id="generate" disabled>Generate CLI Script</button>
+
+    <pre id="output"></pre>
+  </div>
+
+  <script>
+    const regionEl = document.getElementById('region');
+    const clientEl = document.getElementById('client');
+    const ticketEl = document.getElementById('ticket');
+    const generateBtn = document.getElementById('generate');
+    const outputEl = document.getElementById('output');
+
+    function updateButtonState() {
+      generateBtn.disabled = !regionEl.value || !clientEl.value || !ticketEl.value;
+    }
+
+    regionEl.addEventListener('change', updateButtonState);
+    clientEl.addEventListener('input', updateButtonState);
+    ticketEl.addEventListener('input', updateButtonState);
+
+    generateBtn.addEventListener('click', () => {
+      const region = regionEl.value;
+      const client = clientEl.value.toLowerCase();
+      const ticket = ticketEl.value;
+      const rg = `rg-${client}-networking-${region}`;
+      const vng = `vng-${client}-${region}`;
+      const workspace = `law-${client}-${region}`;
+
+      const script = `#!/bin/bash\n\n# Auto-generated for ${client.toUpperCase()}, ticket ${ticket}\nregion=\"${region}\"\nresourceGroup=\"${rg}\"\nvngName=\"${vng}\"\nworkspaceName=\"${workspace}\"\ndiagnosticName=\"vpn-diagnostics\"\n\n# Create Log Analytics Workspace\naz monitor log-analytics workspace create \\\n  --resource-group \"$resourceGroup\" \\\n  --workspace-name \"$workspaceName\" \\\n  --location \"$region\" \\\n  --tags bbbticket=${ticket}\n\n# Get Workspace ID\nworkspaceId=$(az monitor log-analytics workspace show \\\n  --resource-group \"$resourceGroup\" \\\n  --workspace-name \"$workspaceName\" \\\n  --query id -o tsv)\n\n# Enable diagnostics on VPN Gateway\naz monitor diagnostic-settings create \\\n  --name \"$diagnosticName\" \\\n  --resource \"/subscriptions/<YOUR-SUBSCRIPTION-ID>/resourceGroups/$resourceGroup/providers/Microsoft.Network/virtualNetworkGateways/$vngName\" \\\n  --workspace \"$workspaceId\" \\\n  --logs '[\n    {"category": "GatewayDiagnosticLog", "enabled": true},\n    {"category": "TunnelDiagnosticLog", "enabled": true},\n    {"category": "P2SDiagnosticLog", "enabled": true}\n  ]' \\\n  --metrics '[\n    {\n      "category": "AllMetrics",\n      "enabled": true,\n      "retentionPolicy": {\n        "enabled": false,\n        "days": 0\n      }\n    }\n  ]\n\necho \"✅ Diagnostics configured for $vngName\"`;
+
+      outputEl.textContent = script;
+    });
+  </script>
+</body>
+</html>
