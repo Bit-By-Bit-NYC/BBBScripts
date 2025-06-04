@@ -27,18 +27,46 @@ namespace Functions
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequestData req,
             FunctionContext executionContext)
         {
-            _logger.LogInformation("GetRebootPatchStatus function triggered.");
+            _logger.LogInformation("🟢 Function triggered at {time}", DateTime.UtcNow);
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
             string subscriptionId = query["subscriptionId"];
             string workspaceId = query["workspaceId"];
 
+            _logger.LogInformation("📥 Query params - SubscriptionId: {sub}, WorkspaceId: {ws}", subscriptionId, workspaceId);
+
             if (string.IsNullOrWhiteSpace(subscriptionId) || string.IsNullOrWhiteSpace(workspaceId))
             {
+                _logger.LogWarning("⚠️ Missing query parameters.");
                 var badResponse = req.CreateResponse(HttpStatusCode.BadRequest);
                 await badResponse.WriteStringAsync("Missing 'subscriptionId' or 'workspaceId' query parameters.");
                 return badResponse;
             }
+
+            var clientId = Environment.GetEnvironmentVariable("AZ_STAT_CLIENT_ID");
+            var clientSecret = Environment.GetEnvironmentVariable("AZ_STAT_SECRET");
+            var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
+
+            _logger.LogDebug("🔐 Using TenantId: {tenant}, ClientId: {client}", tenantId, clientId);
+
+            ClientSecretCredential credential;
+            try
+            {
+                credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+                _logger.LogInformation("✅ ClientSecretCredential created.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Failed to create ClientSecretCredential.");
+                var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                await errorResponse.WriteStringAsync("Error creating credentials.");
+                return errorResponse;
+            }
+
+
+## 2025-06-04-JJS/GP - failing we think on following code; Check Application Insights runninb before hitting
+            var logsClient = new LogsQueryClient(credential);
+            var resultList = new List<object>();
 
             var kqlQuery = @"
 let rebootData = 
@@ -67,23 +95,15 @@ rebootData
     PatchDetails = coalesce(PatchDetails, ""No patch record found"")
 ";
 
-          
-
-            var clientId = Environment.GetEnvironmentVariable("AZ_STAT_CLIENT_ID");
-            var clientSecret = Environment.GetEnvironmentVariable("AZ_STAT_SECRET");
-            var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
-
-            var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-            
-            var logsClient = new LogsQueryClient(credential);
-            var resultList = new List<object>();
-
             try
             {
+                _logger.LogInformation("📤 Submitting KQL query...");
                 var response = await logsClient.QueryWorkspaceAsync(
                     workspaceId,
                     kqlQuery,
                     new QueryTimeRange(TimeSpan.FromDays(30)));
+
+                _logger.LogInformation("📥 Query result received. Rows: {count}", response.Value.Table.Rows.Count);
 
                 var table = response.Value.Table;
                 foreach (var row in table.Rows)
@@ -103,9 +123,9 @@ rebootData
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Log Analytics query failed.");
+                _logger.LogError(ex, "❌ Log Analytics query failed.");
                 var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
-                await errorResponse.WriteStringAsync("Error querying Log Analytics workspace.");
+                await errorResponse.WriteStringAsync($"Error querying Log Analytics workspace: {ex.Message}");
                 return errorResponse;
             }
         }
