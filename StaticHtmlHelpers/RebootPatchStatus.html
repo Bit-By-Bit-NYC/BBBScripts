@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reboot & Patch Status</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; padding: 20px; background-color: #f5f8fb; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #002e6d; color: white; }
+    select, button { padding: 6px; margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <h2>🔎 Check Reboot & Patch Status</h2>
+
+  <label for="tenantSelect">Choose a tenant:</label>
+  <select id="tenantSelect"></select>
+  <br />
+
+  <button onclick="fetchPatchStatus()">Get Status</button>
+
+  <div id="resultsContainer"></div>
+
+  <script>
+    const tenantApiUrl = "https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=HSq9Mt_Hgd0ISxi7r-5PwGxJ8U-9oPq7EcwGypmCsHzKAzFu7Xlueg==";
+    const statusApiUrl = "https://func-bbb-tenantapi.azurewebsites.net/api/GetRebootPatchStatus";
+
+    async function loadTenants() {
+      const res = await fetch(tenantApiUrl);
+      const tenants = await res.json();
+
+      const select = document.getElementById("tenantSelect");
+      tenants.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = `${t.SubscriptionId}|${t.WorkspaceId}`;
+        opt.textContent = `${t.TenantName} (${t.SubscriptionId})`;
+        select.appendChild(opt);
+      });
+    }
+
+    async function fetchPatchStatus() {
+      const [subscriptionId, workspaceId] = document.getElementById("tenantSelect").value.split("|");
+
+      const res = await fetch(`${statusApiUrl}?subscriptionId=${subscriptionId}&workspaceId=${workspaceId}`);
+      const data = await res.json();
+
+      const table = document.createElement("table");
+      const headers = ["Computer", "Last Reboot", "Last Patch", "Patch Details"];
+      const thead = document.createElement("thead");
+      const tr = document.createElement("tr");
+      headers.forEach(h => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+      data.forEach(item => {
+        const row = document.createElement("tr");
+        headers.forEach(h => {
+          const td = document.createElement("td");
+          td.textContent = item[h.replace(" ", "")] || "";
+          row.appendChild(td);
+        });
+        tbody.appendChild(row);
+      });
+      table.appendChild(tbody);
+
+      const container = document.getElementById("resultsContainer");
+      container.innerHTML = "";
+      container.appendChild(table);
+    }
+
+    loadTenants();
+  </script>
+</body>
+</html>
