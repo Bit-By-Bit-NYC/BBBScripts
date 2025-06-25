@@ -99,7 +99,7 @@
   <script>
     async function loadTenants() {
       try {
-        const res = await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=QcrX6LxbRDdEOL4aUTJbvqABR4H2VYZ0ERih0IgzP8zmAzFuZwrdpA==');
+        const res = await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=');
         const tenants = await res.json();
         const dropdown = document.getElementById('tenantDropdown');
         tenants.forEach(t => {
@@ -117,7 +117,7 @@
       const tenantId = document.getElementById('tenantDropdown').value;
       document.getElementById('output').textContent = 'Fetching data...';
       try {
-        const res = await fetch(`https://func-bbb-tenantapi.azurewebsites.net/api/GetLicensingData?code=QcrX6LxbRDdEOL4aUTJbvqABR4H2VYZ0ERih0IgzP8zmAzFuZwrdpA==&tenantId=${tenantId}`);
+        const res = await fetch(`https://func-bbb-tenantapi.azurewebsites.net/api/GetLicensingData?${tenantId}`);
         const data = await res.json();
         document.getElementById('output').textContent = JSON.stringify(data, null, 2);
       } catch (err) {
