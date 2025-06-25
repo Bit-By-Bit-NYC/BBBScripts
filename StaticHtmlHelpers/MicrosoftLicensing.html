@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Microsoft Licensing Lookup</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: #f5f8fb;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      background-color: #0078d7;
+      color: white;
+      padding: 1rem 2rem;
+      width: 100%;
+      text-align: center;
+      font-size: 1.75rem;
+      font-weight: 600;
+    }
+
+    main {
+      background-color: #ffffff;
+      padding: 2rem;
+      margin-top: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      width: 90%;
+      max-width: 700px;
+    }
+
+    h2 {
+      color: #333;
+    }
+
+    p.description {
+      color: #555;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    select, button {
+      width: 100%;
+      padding: 0.75rem;
+      margin-top: 1rem;
+      font-size: 1rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background-color: #0078d7;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover {
+      background-color: #005aab;
+    }
+
+    pre {
+      background-color: #000;
+      color: #0f0;
+      padding: 1rem;
+      margin-top: 2rem;
+      font-size: 0.9rem;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      max-height: 400px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    🧾 Microsoft Licensing Lookup
+  </header>
+  <main>
+    <h2>Select a Tenant</h2>
+    <p class="description">
+      This tool allows Bit by Bit team members to look up Microsoft 365 user and licensing information for a selected customer tenant. 
+      The tenant list is fetched from an internal Azure Function. After selecting a tenant, this tool queries a secure backend function using 
+      Managed Identity to pull licensing assignments for all users in the selected tenant.
+    </p>
+
+    <select id="tenantDropdown"></select>
+    <button onclick="getLicensing()">Fetch Licensing Data</button>
+    <pre id="output">Waiting for input...</pre>
+  </main>
+
+  <script>
+    async function loadTenants() {
+      try {
+        const res = await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=QcrX6LxbRDdEOL4aUTJbvqABR4H2VYZ0ERih0IgzP8zmAzFuZwrdpA==');
+        const tenants = await res.json();
+        const dropdown = document.getElementById('tenantDropdown');
+        tenants.forEach(t => {
+          const option = document.createElement('option');
+          option.value = t.TenantId;
+          option.textContent = `${t.TenantName} (${t.TenantId})`;
+          dropdown.appendChild(option);
+        });
+      } catch (err) {
+        document.getElementById('output').textContent = 'Failed to load tenants: ' + err;
+      }
+    }
+
+    async function getLicensing() {
+      const tenantId = document.getElementById('tenantDropdown').value;
+      document.getElementById('output').textContent = 'Fetching data...';
+      try {
+        const res = await fetch(`https://func-bbb-tenantapi.azurewebsites.net/api/GetLicensingData?code=QcrX6LxbRDdEOL4aUTJbvqABR4H2VYZ0ERih0IgzP8zmAzFuZwrdpA==&tenantId=${tenantId}`);
+        const data = await res.json();
+        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById('output').textContent = 'Error fetching data: ' + err;
+      }
+    }
+
+    loadTenants();
+  </script>
+</body>
+</html>

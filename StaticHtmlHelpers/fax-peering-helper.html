@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bit by Bit – Fax Peering Helper</title>
+  <style>
+    body {
+      font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+      background-color: #f5f8fb;
+      color: #1f2d3d;
+      padding: 40px;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h2 {
+      color: #002e6d;
+      font-weight: 600;
+      border-bottom: 2px solid #e1e4e8;
+      padding-bottom: 10px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 20px;
+      margin-bottom: 6px;
+    }
+
+    input {
+      font-family: monospace;
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccd6e0;
+      border-radius: 4px;
+    }
+
+    button {
+      background-color: #002e6d;
+      color: white;
+      font-weight: bold;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      margin-top: 20px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #0040a3;
+    }
+
+    pre {
+      margin-top: 20px;
+      width: 100%;
+      height: 480px;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 12px;
+      background-color: #f0f3f7;
+      border: 1px solid #ccd6e0;
+      border-radius: 4px;
+      white-space: pre;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>Bit by Bit – Fax Peering Helper 📡🧷</h2>
+
+  <label for="ticketId">BBB Ticket #:</label>
+  <input type="text" id="ticketId" placeholder="e.g. 994367" />
+
+  <label for="subscriptionId">Azure Subscription ID:</label>
+  <input type="text" id="subscriptionId" value="98a534ec-4bbd-461f-b87d-55d836a38a57" />
+
+  <label for="customerName">Customer Name:</label>
+  <input type="text" id="customerName" placeholder="e.g. First Environment" />
+
+  <label for="customerCode">Customer Code:</label>
+  <input type="text" id="customerCode" placeholder="e.g. FE" />
+
+  <label for="resourceGroup">Resource Group Name (optional):</label>
+  <input type="text" id="resourceGroup" placeholder="e.g. rg-fe" />
+
+  <label for="customerSubnet">Customer Network (/16):</label>
+  <input type="text" id="customerSubnet" placeholder="e.g. 10.123.0.0/16" />
+
+  <button onclick="validateAndGenerate()">Generate az CLI Script</button>
+
+  <label for="output">Generated Script:</label>
+  <pre id="output" readonly></pre>
+
+  <script>
+    function validateAndGenerate() {
+      const name = document.getElementById("customerName").value.trim();
+      const code = document.getElementById("customerCode").value.trim();
+      const ticket = document.getElementById("ticketId").value.trim();
+      const subscriptionId = document.getElementById("subscriptionId").value.trim();
+      const subnet = document.getElementById("customerSubnet").value.trim();
+      const rgInput = document.getElementById("resourceGroup");
+      let rgName = rgInput.value.trim();
+      const output = document.getElementById("output");
+      output.innerText = "";
+
+      const cidrPattern = /^\d{1,3}(\.\d{1,3}){3}\/16$/;
+      if (!cidrPattern.test(subnet)) {
+        output.innerText = "Subnet must be in CIDR format and /16, e.g., 10.123.0.0/16";
+        return;
+      }
+
+      if (!rgName) {
+        rgName = `rg-${code.toLowerCase()}`;
+        rgInput.value = rgName;
+      }
+
+      const vnetName = `vnet-${code.toLowerCase()}`;
+      const location = "eastus2";
+      const subnetPrefix = subnet.split("/")[0].split(".");
+      subnetPrefix[2] = "1";
+      const firstSubnet = `${subnetPrefix.join(".")}/24`;
+
+      const sbcVNets = [
+        {
+          name: "az-audiocodes1-vnet",
+          id: "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/virtualNetworks/az-audiocodes1-vnet"
+        },
+        {
+          name: "vn-telco-eastus2",
+          id: "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-telco-eastus2/providers/Microsoft.Network/virtualNetworks/vn-telco-eastus2"
+        },
+        {
+          name: "vn-telco-westus2",
+          id: "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-telco-westus2/providers/Microsoft.Network/virtualNetworks/vn-telco-westus2"
+        }
+      ];
+
+      let cli = `# Create resource group\n` +
+        `az group create --name ${rgName} --location ${location} --tags bbb-ticket=${ticket}\n\n` +
+        `# Create VNET\n` +
+        `az network vnet create \\\n` +
+        `  --name ${vnetName} \\\n` +
+        `  --resource-group ${rgName} \\\n` +
+        `  --location ${location} \\\n` +
+        `  --address-prefixes ${subnet} \\\n` +
+        `  --subnet-name default \\\n` +
+        `  --subnet-prefix ${firstSubnet} \\\n` +
+        `  --tags bbb-ticket=${ticket}\n\n`;
+
+      sbcVNets.forEach(sbc => {
+        cli += `# Peer ${vnetName} to ${sbc.name}\n` +
+          `az network vnet peering create \\\n` +
+          `  --name peer-to-${sbc.name}-bbb-${ticket} \\\n` +
+          `  --resource-group ${rgName} \\\n` +
+          `  --vnet-name ${vnetName} \\\n` +
+          `  --remote-vnet ${sbc.id} \\\n` +
+          `  --allow-vnet-access \\\n` +
+          `  --allow-forwarded-traffic\n\n` +
+
+          `# Peer ${sbc.name} to ${vnetName}\n` +
+          `az network vnet peering create \\\n` +
+          `  --name peer-to-${code.toLowerCase()}-bbb-${ticket} \\\n` +
+          `  --resource-group ${sbc.id.split("/")[4]} \\\n` +
+          `  --vnet-name ${sbc.name} \\\n` +
+          `  --remote-vnet /subscriptions/${subscriptionId}/resourceGroups/${rgName}/providers/Microsoft.Network/virtualNetworks/${vnetName} \\\n` +
+          `  --allow-vnet-access \\\n` +
+          `  --allow-forwarded-traffic\n\n`;
+      });
+
+      output.innerText = cli;
+    }
+  </script>
+</body>
+</html>
