@@ -1,55 +1,87 @@
-// Azure Function: GetRebootPatchStatus.cs
+// Azure Function: GetRebootPatchStatus.cs (Isolated Worker Model)
 using System;
-using System.IO;
-using System.Linq;
+using System.Collections.Generic;
 using System.Net;
-using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Azure.Identity;
 using Azure.Monitor.Query;
 using Azure.Monitor.Query.Models;
-using System.Collections.Generic;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace Functions
 {
-    public static class GetRebootPatchStatus
+    public class GetRebootPatchStatus
     {
-        [FunctionName("GetRebootPatchStatus")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
-            ILogger log)
-        {
-            log.LogInformation("C# HTTP trigger function processed a request.");
+        private readonly ILogger _logger;
 
-            string subscriptionId = req.Query["subscriptionId"];
-            string workspaceId = req.Query["workspaceId"];
+        public GetRebootPatchStatus(ILoggerFactory loggerFactory)
+        {
+            _logger = loggerFactory.CreateLogger<GetRebootPatchStatus>();
+        }
+
+        [Function("GetRebootPatchStatus")]
+        public async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequestData req,
+            FunctionContext executionContext)
+        {
+            _logger.LogInformation("🟢 Function triggered at {time}", DateTime.UtcNow);
+
+            var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+            string subscriptionId = query["subscriptionId"];
+            string workspaceId = query["workspaceId"];
+
+            _logger.LogInformation("📥 Query params - SubscriptionId: {sub}, WorkspaceId: {ws}", subscriptionId, workspaceId);
 
             if (string.IsNullOrWhiteSpace(subscriptionId) || string.IsNullOrWhiteSpace(workspaceId))
             {
-                return new BadRequestObjectResult("Please provide both 'subscriptionId' and 'workspaceId' as query parameters.");
+                _logger.LogWarning("⚠️ Missing query parameters.");
+                var badResponse = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badResponse.WriteStringAsync("Missing 'subscriptionId' or 'workspaceId' query parameters.");
+                return badResponse;
             }
+
+            var clientId = Environment.GetEnvironmentVariable("AZ_STAT_CLIENT_ID");
+            var clientSecret = Environment.GetEnvironmentVariable("AZ_STAT_SECRET");
+            var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
+
+            _logger.LogDebug("🔐 Using TenantId: {tenant}, ClientId: {client}", tenantId, clientId);
+
+            ClientSecretCredential credential;
+            try
+            {
+                credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+                _logger.LogInformation("✅ ClientSecretCredential created.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Failed to create ClientSecretCredential.");
+                var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                await errorResponse.WriteStringAsync("Error creating credentials.");
+                return errorResponse;
+            }
+
+
+## 2025-06-04-JJS/GP - failing we think on following code; Check Application Insights runninb before hitting
+            var logsClient = new LogsQueryClient(credential);
+            var resultList = new List<object>();
 
             var kqlQuery = @"
 let rebootData = 
     Event
-    | where EventLog == \"System\"
+    | where EventLog == ""System""
     | where EventID in (6005, 6006)
     | extend ComputerName = tolower(Computer)
     | summarize LastReboot = max(TimeGenerated), RebootComputer = any(Computer) by ComputerName;
 
 let patchData = 
     Event
-    | where EventLog == \"System\"
+    | where EventLog == ""System""
     | where EventID == 19
-    | where not(RenderedDescription has \"Defender\" or RenderedDescription has \"Security Intelligence Update\" or RenderedDescription has \".NET Framework\")
-    | where RenderedDescription has \"Installation Successful: Windows successfully installed the following update\" and RenderedDescription has \"Cumulative\" or RenderedDescription has \"Security\"
+    | where not(RenderedDescription has ""Defender"" or RenderedDescription has ""Security Intelligence Update"" or RenderedDescription has "".NET Framework"")
+    | where RenderedDescription has ""Installation Successful: Windows successfully installed the following update"" and (RenderedDescription has ""Cumulative"" or RenderedDescription has ""Security"")
     | extend ComputerName = tolower(Computer)
     | summarize arg_max(TimeGenerated, RenderedDescription, Computer) by ComputerName
     | project ComputerName, LastPatchTime = TimeGenerated, PatchDetails = RenderedDescription, PatchComputer = Computer;
@@ -60,52 +92,49 @@ rebootData
     Computer = coalesce(RebootComputer, PatchComputer),
     LastReboot = coalesce(LastReboot, datetime(null)),
     LastPatchTime = coalesce(LastPatchTime, datetime(null)),
-    PatchDetails = coalesce(PatchDetails, \"No patch record found\")
+    PatchDetails = coalesce(PatchDetails, ""No patch record found"")
 ";
-
-            var credential = new DefaultAzureCredential();
-            var logsClient = new LogsQueryClient(credential);
 
             try
             {
+                _logger.LogInformation("📤 Submitting KQL query...");
                 var response = await logsClient.QueryWorkspaceAsync(
                     workspaceId,
                     kqlQuery,
                     new QueryTimeRange(TimeSpan.FromDays(30)));
 
-                var table = response.Value.Table;
-                var results = new List<object>();
+                _logger.LogInformation("📥 Query result received. Rows: {count}", response.Value.Table.Rows.Count);
 
+                var table = response.Value.Table;
                 foreach (var row in table.Rows)
                 {
-                    var computer = row["Computer"]?.ToString();
-                    var reboot = FormatDate(row["LastReboot"]);
-                    var patch = FormatDate(row["LastPatchTime"]);
-                    var patchDetails = row["PatchDetails"]?.ToString() ?? "N/A";
-
-                    results.Add(new
+                    resultList.Add(new
                     {
-                        Computer = computer,
-                        LastReboot = reboot,
-                        LastPatchTime = patch,
-                        PatchDetails = patchDetails
+                        Computer = row["Computer"]?.ToString(),
+                        LastReboot = FormatDate(row["LastReboot"]),
+                        LastPatchTime = FormatDate(row["LastPatchTime"]),
+                        PatchDetails = row["PatchDetails"]?.ToString()
                     });
                 }
 
-                return new JsonResult(results);
+                var okResponse = req.CreateResponse(HttpStatusCode.OK);
+                await okResponse.WriteAsJsonAsync(resultList);
+                return okResponse;
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Failed to query log analytics.");
-                return new StatusCodeResult(500);
+                _logger.LogError(ex, "❌ Log Analytics query failed.");
+                var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                await errorResponse.WriteStringAsync($"Error querying Log Analytics workspace: {ex.Message}");
+                return errorResponse;
             }
         }
 
         private static string FormatDate(object dt)
         {
-            if (dt == null || string.IsNullOrEmpty(dt.ToString())) return "Missing";
-            if (DateTime.TryParse(dt.ToString(), out var parsed)) return parsed.ToString("yyyy-MM-dd");
-            return "Invalid";
+            return DateTime.TryParse(dt?.ToString(), out var parsed)
+                ? parsed.ToString("yyyy-MM-dd")
+                : "Missing";
         }
     }
 }

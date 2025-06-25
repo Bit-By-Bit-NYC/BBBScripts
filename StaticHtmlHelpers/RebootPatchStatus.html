@@ -2,76 +2,144 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Reboot & Patch Status</title>
+  <title>Reboot & Patch Status Viewer</title>
   <style>
-    body { font-family: "Segoe UI", sans-serif; padding: 20px; background-color: #f5f8fb; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    th { background-color: #002e6d; color: white; }
-    select, button { padding: 6px; margin: 6px 0; }
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f5f8fb;
+      color: #1f2d3d;
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+    }
+    select, input, button {
+      margin-top: 10px;
+      padding: 8px;
+      width: 100%;
+      font-size: 14px;
+    }
+    table {
+      margin-top: 20px;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+    }
+    th {
+      background-color: #002e6d;
+      color: white;
+    }
   </style>
 </head>
 <body>
-  <h2>🔎 Check Reboot & Patch Status</h2>
+  <h2>🛠 Reboot & Patch Status Dashboard</h2>
 
-  <label for="tenantSelect">Choose a tenant:</label>
-  <select id="tenantSelect"></select>
-  <br />
+  <label for="tenantSelect">Choose a Tenant:</label>
+  <select id="tenantSelect" onchange="updateSelected()"></select>
 
-  <button onclick="fetchPatchStatus()">Get Status</button>
+  <label for="subscriptionId">Subscription ID (override or confirm):</label>
+  <input type="text" id="subscriptionId" placeholder="Enter or confirm Subscription ID" />
+
+  <label for="workspaceId">Workspace ID (required):</label>
+  <input type="text" id="workspaceId" placeholder="Enter Workspace ID" />
+
+  <button onclick="queryStatus()">Get Reboot/Patch Info</button>
 
   <div id="resultsContainer"></div>
 
   <script>
-    const tenantApiUrl = "https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=HSq9Mt_Hgd0ISxi7r-5PwGxJ8U-9oPq7EcwGypmCsHzKAzFu7Xlueg==";
-    const statusApiUrl = "https://func-bbb-tenantapi.azurewebsites.net/api/GetRebootPatchStatus";
+    const getTenantsUrl = "https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=HSq9Mt_Hgd0ISxi7r-5PwGxJ8U-9oPq7EcwGypmCsHzKAzFu7Xlueg==";
+    const functionUrl = "https://func-bbb-tenantapi.azurewebsites.net/api/GetRebootPatchStatus?code=4o5WozYfnzqmTcVEEVHAVWsQAySp-Q-Ex0s2vKCdJxxQAzFuHTRCMA==";
+
+    let tenants = [];
 
     async function loadTenants() {
-      const res = await fetch(tenantApiUrl);
-      const tenants = await res.json();
+      try {
+        const res = await fetch(getTenantsUrl);
+        tenants = await res.json();
 
-      const select = document.getElementById("tenantSelect");
-      tenants.forEach(t => {
-        const opt = document.createElement("option");
-        opt.value = `${t.SubscriptionId}|${t.WorkspaceId}`;
-        opt.textContent = `${t.TenantName} (${t.SubscriptionId})`;
-        select.appendChild(opt);
-      });
+        const select = document.getElementById("tenantSelect");
+        tenants.forEach((t, i) => {
+          const opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = `${t.TenantName} [${t.SubscriptionId}]`;
+          select.appendChild(opt);
+        });
+
+        updateSelected();
+      } catch (err) {
+        console.error("Failed to load tenants:", err);
+        alert("Error loading tenants.");
+      }
     }
 
-    async function fetchPatchStatus() {
-      const [subscriptionId, workspaceId] = document.getElementById("tenantSelect").value.split("|");
+    function updateSelected() {
+      const index = document.getElementById("tenantSelect").value;
+      if (tenants[index]) {
+        document.getElementById("subscriptionId").value = tenants[index].SubscriptionId;
+      }
+    }
 
-      const res = await fetch(`${statusApiUrl}?subscriptionId=${subscriptionId}&workspaceId=${workspaceId}`);
-      const data = await res.json();
-
-      const table = document.createElement("table");
-      const headers = ["Computer", "Last Reboot", "Last Patch", "Patch Details"];
-      const thead = document.createElement("thead");
-      const tr = document.createElement("tr");
-      headers.forEach(h => {
-        const th = document.createElement("th");
-        th.textContent = h;
-        tr.appendChild(th);
-      });
-      thead.appendChild(tr);
-      table.appendChild(thead);
-
-      const tbody = document.createElement("tbody");
-      data.forEach(item => {
-        const row = document.createElement("tr");
-        headers.forEach(h => {
-          const td = document.createElement("td");
-          td.textContent = item[h.replace(" ", "")] || "";
-          row.appendChild(td);
-        });
-        tbody.appendChild(row);
-      });
-      table.appendChild(tbody);
-
+    async function queryStatus() {
+      const subscriptionId = document.getElementById("subscriptionId").value.trim();
+      const workspaceId = document.getElementById("workspaceId").value.trim();
       const container = document.getElementById("resultsContainer");
-      container.innerHTML = "";
-      container.appendChild(table);
+
+      if (!workspaceId) {
+        alert("Workspace ID is required.");
+        return;
+      }
+
+      const url = `${functionUrl}&subscriptionId=${encodeURIComponent(subscriptionId)}&workspaceId=${encodeURIComponent(workspaceId)}`;
+
+      container.innerHTML = "Loading...";
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const text = await res.text();
+          container.innerHTML = `<p style="color:red;">Error ${res.status}: ${text}</p>`;
+          return;
+        }
+
+        const data = await res.json();
+        if (data.length === 0) {
+          container.innerHTML = "<p>No data found.</p>";
+          return;
+        }
+
+        const table = document.createElement("table");
+        const headers = ["Computer", "LastReboot", "LastPatchTime", "PatchDetails"];
+        const thead = document.createElement("thead");
+        const tr = document.createElement("tr");
+
+        headers.forEach(h => {
+          const th = document.createElement("th");
+          th.textContent = h;
+          tr.appendChild(th);
+        });
+
+        thead.appendChild(tr);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        data.forEach(row => {
+          const tr = document.createElement("tr");
+          headers.forEach(h => {
+            const td = document.createElement("td");
+            td.textContent = row[h] || "";
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        container.innerHTML = "";
+        container.appendChild(table);
+      } catch (err) {
+        container.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
+      }
     }
 
     loadTenants();
