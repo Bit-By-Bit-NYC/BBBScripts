@@ -45,12 +45,17 @@ public class GetLicensingData
             );
 
             // Set base URL to use the specific tenant
-            graphClient.BaseUrl = $"https://graph.microsoft.com/v1.0";
-
+            //graphClient.BaseUrl = $"https://graph.microsoft.com/v1.0";
             var users = await graphClient.Users
-                .Request()
-                .Select("displayName,userPrincipalName,assignedLicenses,signInActivity")
-                .GetAsync();
+                .GetAsync(config =>
+                {
+                    config.QueryParameters.Select = new[] {
+                        "displayName",
+                        "userPrincipalName",
+                        "assignedLicenses",
+                        "signInActivity"
+                    };
+                });
 
             var skuMap = new Dictionary<string, string>
             {
@@ -59,14 +64,14 @@ public class GetLicensingData
                 { "6fd2c87f-b296-42f0-b197-1e91e994b900", "Office 365 E3" }
             };
 
-            var results = users.Select(user => new
-            {
-                DisplayName = user.DisplayName,
-                UserPrincipalName = user.UserPrincipalName,
-                Licenses = user.AssignedLicenses?.Select(l => 
-                    skuMap.ContainsKey(l.SkuId.ToString()) ? skuMap[l.SkuId.ToString()] : l.SkuId.ToString()) ?? new List<string> { "None" },
-                LastSignInDate = user.SignInActivity?.LastSignInDateTime
-            });
+var results = usersResponse?.Value?.Select(user => new
+{
+    DisplayName = user.DisplayName,
+    UserPrincipalName = user.UserPrincipalName,
+    Licenses = user.AssignedLicenses?.Select(l =>
+        skuMap.ContainsKey(l.SkuId.ToString()) ? skuMap[l.SkuId.ToString()] : l.SkuId.ToString()) ?? new List<string> { "None" },
+    LastSignInDate = user.SignInActivity?.LastSignInDateTime
+});
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(results);

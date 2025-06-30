@@ -64,7 +64,7 @@ namespace Functions
             }
 
 
-## 2025-06-04-JJS/GP - failing we think on following code; Check Application Insights runninb before hitting
+// 2025-06-04-JJS/GP - failing we think on following code; Check Application Insights runninb before hitting
             var logsClient = new LogsQueryClient(credential);
             var resultList = new List<object>();
 
