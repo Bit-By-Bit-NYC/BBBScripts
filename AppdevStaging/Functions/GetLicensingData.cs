@@ -1,79 +1,91 @@
+// File: GetLicensingData.cs
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 using System.Net;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using Azure.Identity;
+using Azure.Core;
 using Microsoft.Graph;
 
-public class GetLicensingData
+namespace AppdevStaging.Functions
 {
-    private readonly ILogger _logger;
-
-    public GetLicensingData(ILoggerFactory loggerFactory)
+    public static class GetLicensingData
     {
-        _logger = loggerFactory.CreateLogger<GetLicensingData>();
-    }
-
-    [Function("GetLicensingData")]
-    public async Task<HttpResponseData> Run(
-        [HttpTrigger(AuthorizationLevel.Function, "get")] HttpRequestData req)
-    {
-        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        var tenantId = query["tenantId"];
-
-        if (string.IsNullOrWhiteSpace(tenantId))
+        [Function("GetLicensingData")]
+        public static async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get")] HttpRequestData req,
+            FunctionContext executionContext)
         {
-            var badResponse = req.CreateResponse(HttpStatusCode.BadRequest);
-            await badResponse.WriteStringAsync("Missing tenantId query parameter.");
-            return badResponse;
-        }
+            var log = executionContext.GetLogger("GetLicensingData");
+            log.LogInformation("GetLicensingData triggered.");
 
-        _logger.LogInformation("Processing request for tenant: {TenantId}", tenantId);
+            var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+            string tenantId = query["tenantId"];
+            if (string.IsNullOrEmpty(tenantId))
+            {
+                var badResponse = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badResponse.WriteStringAsync("Missing tenantId in query string.");
+                return badResponse;
+            }
 
-        try
-        {
-            var credential = new ManagedIdentityCredential();
-            var graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
+            try
+            {
+                var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID")!;
+                var clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET")!;
 
-            // ✅ THIS IS THE MISSING LINE
-            var usersResponse = await graphClient.Users
-                .GetAsync(config =>
+                var credential = new ClientSecretCredential(
+                    tenantId,
+                    clientId,
+                    clientSecret);
+
+                var graphClient = new GraphServiceClient(credential);
+                var usersResponse = await graphClient.Users
+                    .GetAsync(requestConfiguration =>
+                    {
+                        requestConfiguration.QueryParameters.Select = new[] {
+                            "displayName",
+                            "userPrincipalName",
+                            "assignedLicenses",
+                            "signInActivity"
+                        };
+                    });
+
+                var skuMap = LicenseHelper.GetSkuMap();
+
+                var results = usersResponse?.Value?.Select(user => new
                 {
-                    config.QueryParameters.Select = new[] {
-                        "displayName",
-                        "userPrincipalName",
-                        "assignedLicenses",
-                        "signInActivity"
-                    };
+                    user.DisplayName,
+                    user.UserPrincipalName,
+                    Licenses = user.AssignedLicenses?.Select(l =>
+                        skuMap.TryGetValue(l.SkuId.ToString(), out var name) ? name : l.SkuId.ToString()) ?? new List<string> { "None" },
+                    LastSignInDate = user.SignInActivity?.LastSignInDateTime
                 });
 
-            var skuMap = new Dictionary<string, string>
+                var response = req.CreateResponse(HttpStatusCode.OK);
+                await response.WriteAsJsonAsync(results);
+                return response;
+            }
+            catch (Exception ex)
             {
-                { "3b555118-da6a-4418-894f-7df1e2096870", "Microsoft 365 Business Standard" },
-                { "c42b9cae-ea4f-4ab7-9717-81576235ccac", "Microsoft 365 E3" },
-                { "6fd2c87f-b296-42f0-b197-1e91e994b900", "Office 365 E3" }
-                // Expand as needed
-            };
-
-            var results = usersResponse?.Value?.Select(user => new
-            {
-                DisplayName = user.DisplayName,
-                UserPrincipalName = user.UserPrincipalName,
-                Licenses = user.AssignedLicenses?.Select(l =>
-                    skuMap.ContainsKey(l.SkuId.ToString()) ? skuMap[l.SkuId.ToString()] : l.SkuId.ToString()) ?? new List<string> { "None" },
-                LastSignInDate = user.SignInActivity?.LastSignInDateTime
-            });
-
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            await response.WriteAsJsonAsync(results);
-            return response;
+                log.LogError(ex, "Error retrieving licensing data.");
+                var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                await errorResponse.WriteStringAsync("Internal server error.");
+                return errorResponse;
+            }
         }
-        catch (Exception ex)
+    }
+
+    public static class LicenseHelper
+    {
+        public static Dictionary<string, string> GetSkuMap() => new Dictionary<string, string>
         {
-            _logger.LogError(ex, "Error retrieving data for tenant: {TenantId}", tenantId);
-            var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
-            await errorResponse.WriteStringAsync($"Internal error: {ex.Message}");
-            return errorResponse;
-        }
+            { "6fd2c87f-b296-42f0-b197-1e91e994b900", "Office 365 E3" },
+            { "c42b9cae-ea4f-4ab7-9717-81576235ccac", "Microsoft 365 Business Basic" },
+            // Add more mappings as needed
+        };
     }
 }
