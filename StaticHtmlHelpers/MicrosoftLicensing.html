@@ -86,8 +86,8 @@
   <main>
     <h2>Select a Tenant</h2>
     <p class="description">
-      This tool allows Bit by Bit team members to look up Microsoft 365 user and licensing information for a selected customer tenant. 
-      The tenant list is fetched from an internal Azure Function. After selecting a tenant, this tool queries a secure backend function using 
+      This tool allows Bit by Bit team members to look up Microsoft 365 user and licensing information for a selected customer tenant.
+      The tenant list is fetched from an internal Azure Function. After selecting a tenant, this tool queries a secure backend function using
       Managed Identity to pull licensing assignments for all users in the selected tenant.
     </p>
 
@@ -110,6 +110,7 @@
         });
       } catch (err) {
         document.getElementById('output').textContent = 'Failed to load tenants: ' + err;
+        console.error('Tenant loading error:', err);
       }
     }
 
@@ -117,11 +118,19 @@
       const tenantId = document.getElementById('tenantDropdown').value;
       document.getElementById('output').textContent = 'Fetching data...';
       try {
-        const res = await fetch(`https://func-bbb-tenantapi.azurewebsites.net/api/GetLicensingData?${tenantId}`);
+        const url = `https://func-bbb-tenantapi.azurewebsites.net/api/GetLicensingData?tenantId=${encodeURIComponent(tenantId)}`;
+        console.log("Calling licensing URL:", url);
+        const res = await fetch(url);
+
+        if (!res.ok) {
+          throw new Error(`Server responded with status ${res.status}`);
+        }
+
         const data = await res.json();
         document.getElementById('output').textContent = JSON.stringify(data, null, 2);
       } catch (err) {
         document.getElementById('output').textContent = 'Error fetching data: ' + err;
+        console.error('Licensing fetch error:', err);
       }
     }
 
