@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Azure.Identity;
 using Azure.Core;
 using Microsoft.Graph;
+using Microsoft.Graph.Models;
 
 namespace AppdevStaging.Functions
 {

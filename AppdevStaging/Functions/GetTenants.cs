@@ -55,7 +55,7 @@ public class GetTenants
             await connection.OpenAsync();
 
             var command = connection.CreateCommand();
-            command.CommandText = "SELECT TenantName, TenantId FROM Tenants";
+            command.CommandText = "SELECT TenantName, TenantId FROM Tenants WHERE IsActive = 1";
 
             var tenants = new List<Dictionary<string, string>>();
             using var reader = await command.ExecuteReaderAsync();
