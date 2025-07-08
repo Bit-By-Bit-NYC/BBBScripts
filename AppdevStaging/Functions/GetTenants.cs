@@ -9,6 +9,7 @@ using System.Data.SqlClient;
 using Azure.Identity;
 using Azure.Core;
 using Microsoft.Extensions.Logging;
+using System.IdentityModel.Tokens.Jwt;
 
 public class GetTenants
 {
@@ -16,7 +17,6 @@ public class GetTenants
 
     public GetTenants()
     {
-        // Build the connection string without authentication info
         _connectionString = "Server=tcp:bbbai.database.windows.net,1433;Initial Catalog=bbbazuredb;";
     }
 
@@ -36,7 +36,16 @@ public class GetTenants
             var credential = new DefaultAzureCredential();
             var tokenRequestContext = new TokenRequestContext(new[] { "https://database.windows.net/.default" });
             var accessToken = await credential.GetTokenAsync(tokenRequestContext);
-            logger.LogInformation("✅ Token acquired.");
+            logger.LogInformation("✅ Token acquired. Token length: {0}", accessToken.Token.Length);
+
+            // 🔍 Debug token claims
+            var handler = new JwtSecurityTokenHandler();
+            var token = handler.ReadJwtToken(accessToken.Token);
+            var oid = token.Payload.TryGetValue("oid", out var oidVal) ? oidVal?.ToString() : "N/A";
+            var upn = token.Payload.TryGetValue("upn", out var upnVal) ? upnVal?.ToString() : "N/A";
+            var sub = token.Subject ?? "N/A";
+
+            logger.LogInformation("🔍 Token identity - OID: {0}, UPN: {1}, Subject: {2}", oid, upn, sub);
 
             logger.LogInformation("🔌 Opening SQL connection...");
             using var connection = new SqlConnection(_connectionString)
@@ -58,8 +67,8 @@ public class GetTenants
                     { "TenantId", reader["TenantId"].ToString() }
                 });
             }
-            logger.LogInformation("📥 Retrieved {0} tenants.", tenants.Count);
 
+            logger.LogInformation("📥 Retrieved {0} tenants.", tenants.Count);
             response.StatusCode = HttpStatusCode.OK;
             await response.WriteStringAsync(JsonSerializer.Serialize(tenants));
         }

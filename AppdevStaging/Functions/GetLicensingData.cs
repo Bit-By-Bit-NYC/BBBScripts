@@ -1,15 +1,14 @@
-// File: GetLicensingData.cs
-using System;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 using System.Net;
+using System.Text.Json;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using Azure.Identity;
-using Azure.Core;
 using Microsoft.Graph;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Linq;
 
 namespace AppdevStaging.Functions
 {
@@ -20,48 +19,49 @@ namespace AppdevStaging.Functions
             [HttpTrigger(AuthorizationLevel.Function, "get")] HttpRequestData req,
             FunctionContext executionContext)
         {
-            var log = executionContext.GetLogger("GetLicensingData");
-            log.LogInformation("GetLicensingData triggered.");
+            var logger = executionContext.GetLogger("GetLicensingData");
+            logger.LogInformation("Triggered GetLicensingData");
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
             string tenantId = query["tenantId"];
-            if (string.IsNullOrEmpty(tenantId))
+
+            if (string.IsNullOrWhiteSpace(tenantId))
             {
                 var badResponse = req.CreateResponse(HttpStatusCode.BadRequest);
-                await badResponse.WriteStringAsync("Missing tenantId in query string.");
+                await badResponse.WriteStringAsync("Missing tenantId");
                 return badResponse;
             }
 
             try
             {
-                var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID")!;
-                var clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET")!;
+                var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
+                var clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
 
-                var credential = new ClientSecretCredential(
-                    tenantId,
-                    clientId,
-                    clientSecret);
+                logger.LogInformation("TenantId: {tenantId}, ClientId: {clientId}, SecretLen: {len}",
+                    tenantId, clientId, clientSecret?.Length ?? -1);
 
-                var graphClient = new GraphServiceClient(credential);
-                var usersResponse = await graphClient.Users
-                    .GetAsync(requestConfiguration =>
+                var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+
+                var graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
+
+                var usersPage = await graphClient.Users
+                    .GetAsync(requestConfig =>
                     {
-                        requestConfiguration.QueryParameters.Select = new[] {
-                            "displayName",
-                            "userPrincipalName",
-                            "assignedLicenses",
-                            "signInActivity"
+                        requestConfig.QueryParameters.Select = new[] {
+                            "displayName", "userPrincipalName", "assignedLicenses", "signInActivity"
                         };
                     });
 
+                logger.LogInformation("Fetched {count} users", usersPage?.Value?.Count ?? 0);
+
                 var skuMap = LicenseHelper.GetSkuMap();
 
-                var results = usersResponse?.Value?.Select(user => new
+                var results = usersPage?.Value?.Select(user => new
                 {
                     user.DisplayName,
                     user.UserPrincipalName,
                     Licenses = user.AssignedLicenses?.Select(l =>
-                        skuMap.TryGetValue(l.SkuId.ToString(), out var name) ? name : l.SkuId.ToString()) ?? new List<string> { "None" },
+                        skuMap.TryGetValue(l.SkuId?.ToString() ?? "", out var name) ? name : l.SkuId?.ToString()) ?? new List<string> { "None" },
                     LastSignInDate = user.SignInActivity?.LastSignInDateTime
                 });
 
@@ -71,9 +71,9 @@ namespace AppdevStaging.Functions
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Error retrieving licensing data.");
+                logger.LogError("Error occurred: {Message}\n{Stack}", ex.Message, ex.StackTrace);
                 var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
-                await errorResponse.WriteStringAsync("Internal server error.");
+                await errorResponse.WriteStringAsync("Internal Server Error: " + ex.Message);
                 return errorResponse;
             }
         }
@@ -81,11 +81,11 @@ namespace AppdevStaging.Functions
 
     public static class LicenseHelper
     {
-        public static Dictionary<string, string> GetSkuMap() => new Dictionary<string, string>
+        public static Dictionary<string, string> GetSkuMap() => new()
         {
             { "6fd2c87f-b296-42f0-b197-1e91e994b900", "Office 365 E3" },
             { "c42b9cae-ea4f-4ab7-9717-81576235ccac", "Microsoft 365 Business Basic" },
-            // Add more mappings as needed
+            // Add more SKUs as needed
         };
     }
 }
