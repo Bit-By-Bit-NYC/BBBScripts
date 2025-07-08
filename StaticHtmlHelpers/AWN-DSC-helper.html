@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerShell DSC Policy Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .form-input {
+            transition: all 0.3s ease;
+        }
+        .btn {
+            transition: all 0.3s ease;
+        }
+        /* Custom scrollbar for the code block */
+        pre::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        pre::-webkit-scrollbar-track {
+            background: #1f2937; /* gray-800 */
+        }
+        pre::-webkit-scrollbar-thumb {
+            background-color: #4b5563; /* gray-600 */
+            border-radius: 20px;
+            border: 3px solid #1f2937; /* gray-800 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4 sm:p-6 lg:p-8">
+
+    <div class="w-full max-w-4xl mx-auto">
+        <div class="bg-gray-800/50 backdrop-blur-sm shadow-2xl rounded-2xl p-6 sm:p-8 border border-gray-700">
+            
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">PowerShell Policy Generator ⚙️</h1>
+                <p class="text-gray-400">Create a custom Azure Policy Guest Configuration script to audit for the Arctic Wolf Agent.</p>
+            </div>
+
+            <!-- Form for variables -->
+            <form id="variable-form" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div>
+                    <label for="subscriptionId" class="block text-sm font-medium text-gray-300 mb-2">Subscription ID</label>
+                    <input type="text" id="subscriptionId" name="subscriptionId" class="form-input bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Enter your subscription ID" required>
+                </div>
+                <div>
+                    <label for="resourceGroupName" class="block text-sm font-medium text-gray-300 mb-2">Resource Group Name</label>
+                    <input type="text" id="resourceGroupName" name="resourceGroupName" class="form-input bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="e.g., rg-policy-auditing" required>
+                </div>
+                <div>
+                    <label for="location" class="block text-sm font-medium text-gray-300 mb-2">Azure Region</label>
+                    <input type="text" id="location" name="location" value="East US" class="form-input bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" required>
+                </div>
+                <div>
+                    <label for="policyName" class="block text-sm font-medium text-gray-300 mb-2">Policy Name</label>
+                    <input type="text" id="policyName" name="policyName" value="Audit-ArcticWolf-Agent-Installed" class="form-input bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" required>
+                </div>
+                 <div class="md:col-span-2">
+                    <label for="policyAssignmentName" class="block text-sm font-medium text-gray-300 mb-2">Policy Assignment Name</label>
+                    <input type="text" id="policyAssignmentName" name="policyAssignmentName" value="Audit-ArcticWolf-Agent-Assignment" class="form-input bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" required>
+                </div>
+            </form>
+
+            <!-- Generate Button -->
+            <div class="text-center mb-8">
+                <button id="generate-btn" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-blue-500/50 transform hover:-translate-y-1">
+                    Generate Script
+                </button>
+            </div>
+
+            <!-- Output section -->
+            <div id="output-section" class="hidden">
+                <div class="relative">
+                    <h3 class="text-xl font-semibold text-white mb-4">Generated PowerShell Script ✨</h3>
+                    <button id="copy-btn" class="btn absolute top-0 right-0 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold py-1 px-3 rounded-md">
+                        Copy
+                    </button>
+                </div>
+                <pre class="bg-gray-900 border border-gray-700 rounded-lg p-4 text-sm overflow-x-auto"><code id="script-output" class="language-powershell"></code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const form = document.getElementById('variable-form');
+        const generateBtn = document.getElementById('generate-btn');
+        const outputSection = document.getElementById('output-section');
+        const scriptOutput = document.getElementById('script-output');
+        const copyBtn = document.getElementById('copy-btn');
+
+        // Event listener for the generate button
+        generateBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (form.checkValidity()) {
+                generateScript();
+            } else {
+                form.reportValidity();
+            }
+        });
+
+        // Function to generate the script
+        function generateScript() {
+            // Get values from the form
+            const subscriptionId = document.getElementById('subscriptionId').value;
+            const resourceGroupName = document.getElementById('resourceGroupName').value;
+            const location = document.getElementById('location').value;
+            const policyName = document.getElementById('policyName').value;
+            const policyAssignmentName = document.getElementById('policyAssignmentName').value;
+
+            // PowerShell script template using template literals
+            const scriptTemplate = `
+# =================================================================================
+# Step 0: PRE-REQUISITES & CONFIGURATION
+# =================================================================================
+# Make sure you have the required modules. Run this if you haven't before.
+# Install-Module -Name Az -AllowClobber
+# Install-Module -Name GuestConfiguration
+
+# --- Configuration from Generator ---
+$subscriptionId    = "${subscriptionId}"
+$resourceGroupName = "${resourceGroupName}"
+$location          = "${location}"
+$storageAccountName = "guestconfig" + (Get-Random -Maximum 100000) # Must be globally unique
+$policyName        = "${policyName}"
+$policyAssignmentName = "${policyAssignmentName}"
+
+# --- Connect to Azure ---
+Write-Host "Connecting to Azure..." -ForegroundColor Yellow
+Connect-AzAccount
+Set-AzContext -SubscriptionId $subscriptionId
+
+# =================================================================================
+# Step 1: CREATE THE DSC CONFIGURATION
+# This defines the state we want to audit. We're checking if a file exists.
+# =================================================================================
+Write-Host "Creating DSC Configuration script..." -ForegroundColor Green
+
+# The DSC configuration script. It uses the 'File' resource to check for the agent's executable.
+$dscConfigurationScript = @"
+Configuration AuditArcticWolfAgent {
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
+    Node 'localhost' {
+        File AuditArcticWolfDirectory {
+            DestinationPath = 'C:\\Program Files (x86)\\Arctic Wolf Networks\\Agent'
+            Ensure          = 'Present'
+            Type            = 'Directory'
+        }
+    }
+}
+"@
+# Save the script to a file
+$configPath = ".\\AuditArcticWolfAgent.ps1"
+$dscConfigurationScript | Out-File -FilePath $configPath
+
+# Execute the script to make the configuration available in the session
+. $configPath
+
+# =================================================================================
+# Step 2: COMPILE DSC & CREATE GUEST CONFIGURATION PACKAGE
+# This turns our script into a .mof file and then packages it into a .zip
+# =================================================================================
+Write-Host "Compiling DSC to MOF file..." -ForegroundColor Green
+AuditArcticWolfAgent # This creates the localhost.mof file
+
+Write-Host "Creating Guest Configuration package (.zip)..." -ForegroundColor Green
+New-GuestConfigurationPackage \`
+    -Configuration ".\\localhost.mof" \`
+    -Name $policyName \`
+    -Path ".\\" \`
+    -Force
+
+# =================================================================================
+# Step 3: UPLOAD THE PACKAGE TO AZURE STORAGE
+# The policy needs a URL to find our custom configuration package.
+# =================================================================================
+Write-Host "Setting up Azure Storage Account..." -ForegroundColor Green
+New-AzResourceGroup -Name $resourceGroupName -Location $location -Force
+$storageAccount = New-AzStorageAccount \`
+    -ResourceGroupName $resourceGroupName \`
+    -Name $storageAccountName \`
+    -Location $location \`
+    -SkuName Standard_LRS
+
+$context = $storageAccount.Context
+$containerName = "guestconfiguration"
+New-AzStorageContainer -Name $containerName -Context $context -Permission Off
+
+Write-Host "Uploading package to Blob Storage..." -ForegroundColor Green
+$packageZipPath = ".\\$($policyName).zip"
+Set-AzStorageBlobContent -File $packageZipPath -Container $containerName -Context $context -Force
+
+$packageUri = (Get-AzStorageBlob -Container $containerName -Blob "$($policyName).zip" -Context $context).ICloudBlob.Uri.AbsoluteUri
+
+# =================================================================================
+# Step 4: CREATE AND ASSIGN THE AZURE POLICY
+# This uses the 'GuestConfiguration' module to create the policy definition
+# and then assigns it to a resource group.
+# =================================================================================
+Write-Host "Creating Azure Policy Definition..." -ForegroundColor Green
+$policyDefinitionParameters = @{
+    Name          = $policyName
+    Policy        = $packageZipPath # The module reads the zip to get details
+    Path          = ".\\"
+    Platform      = "Windows"
+    Mode          = "Audit" # Use 'Audit' to report, 'AuditAndSet' to enforce
+    DisplayName   = "Audit: Arctic Wolf Agent should be installed"
+    Description   = "Audits that the Arctic Wolf Agent installation directory exists on Windows VMs."
+}
+New-GuestConfigurationPolicy @policyDefinitionParameters
+
+Write-Host "Publishing Policy Definition to Azure..." -ForegroundColor Green
+$policyJsonPath = ".\\$($policyName)\\AuditIfNotExists.json"
+$policyDefinition = New-AzPolicyDefinition -Name $policyName -Policy (Get-Content $policyJsonPath -Raw)
+
+Write-Host "Assigning policy to Resource Group '$($resourceGroupName)'..." -ForegroundColor Green
+$scope = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName"
+New-AzPolicyAssignment \`
+    -Name $policyAssignmentName \`
+    -Scope $scope \`
+    -PolicyDefinition $policyDefinition
+
+Write-Host "✅ Done! Policy has been created and assigned." -ForegroundColor Cyan
+Write-Host "It may take 15-30 minutes for the compliance status to appear in the Azure Portal."
+`;
+            // Display the generated script
+            scriptOutput.textContent = scriptTemplate.trim();
+            outputSection.classList.remove('hidden');
+        }
+
+        // Event listener for the copy button
+        copyBtn.addEventListener('click', () => {
+            const textToCopy = scriptOutput.textContent;
+            
+            // A reliable way to copy to clipboard that works in most environments
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = textToCopy;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextArea);
+
+            // Provide user feedback
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => {
+                copyBtn.textContent = 'Copy';
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
