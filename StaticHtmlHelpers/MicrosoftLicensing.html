@@ -2,130 +2,221 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Microsoft Licensing Lookup</title>
+  <title>Microsoft Licensing Viewer</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      background-color: #f5f8fb;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    header {
-      background-color: #0078d7;
-      color: white;
-      padding: 1rem 2rem;
-      width: 100%;
-      text-align: center;
-      font-size: 1.75rem;
-      font-weight: 600;
-    }
-
-    main {
-      background-color: #ffffff;
-      padding: 2rem;
-      margin-top: 2rem;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      width: 90%;
-      max-width: 700px;
-    }
-
-    h2 {
-      color: #333;
-    }
-
-    p.description {
-      color: #555;
-      font-size: 0.95rem;
-      line-height: 1.4;
-    }
-
-    select, button {
-      width: 100%;
-      padding: 0.75rem;
-      margin-top: 1rem;
-      font-size: 1rem;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-    }
-
-    button {
-      background-color: #0078d7;
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    button:hover {
-      background-color: #005aab;
-    }
-
-    pre {
-      background-color: #000;
-      color: #0f0;
-      padding: 1rem;
-      margin-top: 2rem;
-      font-size: 0.9rem;
-      border-radius: 6px;
-      white-space: pre-wrap;
-      overflow-x: auto;
-      max-height: 400px;
-    }
+    body { font-family: sans-serif; padding: 1em; }
+    select, button { margin: 0.5em 0; padding: 0.3em; }
+    pre { background: #111; color: #0f0; padding: 0.5em; overflow: auto; display: none; }
+    table { border-collapse: collapse; margin-top: 1em; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 0.4em; text-align: left; }
+    th.sortable:hover { cursor: pointer; background-color: #f0f0f0; }
+    .pagination { margin-top: 1em; }
+    .pagination button { margin: 0 2px; }
+    input.column-filter { width: 98%; margin-top: 4px; }
   </style>
 </head>
 <body>
-  <header>
-    🧾 Microsoft Licensing Lookup
-  </header>
-  <main>
-    <h2>Select a Tenant</h2>
-    <p class="description">
-      This tool allows Bit by Bit team members to look up Microsoft 365 user and licensing information for a selected customer tenant. 
-      The tenant list is fetched from an internal Azure Function. After selecting a tenant, this tool queries a secure backend function using 
-      Managed Identity to pull licensing assignments for all users in the selected tenant.
-    </p>
+  <h2>Select a Tenant</h2>
+  <p>This tool allows Bit by Bit team members to look up Microsoft 365 user and licensing information for a selected customer tenant.</p>
 
-    <select id="tenantDropdown"></select>
-    <button onclick="getLicensing()">Fetch Licensing Data</button>
-    <pre id="output">Waiting for input...</pre>
-  </main>
+  <select id="tenantDropdown"></select><br/>
+  <label><input type="checkbox" id="excludeEmpty" checked> Exclude users without any licenses</label><br/>
+  <label>Rows per page: 
+    <select id="rowsPerPageSelect">
+      <option>10</option>
+      <option>25</option>
+      <option selected>50</option>
+      <option>100</option>
+    </select>
+  </label><br/>
+
+  <button onclick="fetchLicensing()">Fetch Licensing Data</button>
+  <a id="downloadBtn" href="#" download="LicensingData.json" style="display:none">⬇ Export JSON</a>
+  <button onclick="exportFilteredCSV()" style="display:none" id="csvExportBtn">⬇ Export Filtered CSV</button>
+
+  <p><a href="#" onclick="toggleJSON(); return false;">▼ Show Raw JSON</a></p>
+  <pre id="rawJson"></pre>
+  <div id="grid"></div>
+  <div class="pagination" id="pagination"></div>
+
+  <footer><small>Last updated: 2025-07-08 | Revision 1.7</small></footer>
 
   <script>
-    async function loadTenants() {
-      try {
-        const res = await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants?code=');
-        const tenants = await res.json();
-        const dropdown = document.getElementById('tenantDropdown');
-        tenants.forEach(t => {
-          const option = document.createElement('option');
-          option.value = t.TenantId;
-          option.textContent = `${t.TenantName} (${t.TenantId})`;
-          dropdown.appendChild(option);
-        });
-      } catch (err) {
-        document.getElementById('output').textContent = 'Failed to load tenants: ' + err;
-      }
+    const licenseLookup = {
+      "6fd2c87f-b296-42f0-b197-1e91e994b900": "Office 365 E3",
+      "c42b9cae-ea4f-4ab7-9717-81576235ccac": "Microsoft 365 Business Basic",
+      "18181a46-0d4e-45cd-891e-60aabd171b4e": "Microsoft 365 Business Standard",
+      "a403ebcc-fae0-4ca2-8c8c-7a907fd6c235": "Microsoft 365 E5",
+      "05e9a617-0261-4cee-bb44-138d3ef5d965": "Microsoft 365 E3",
+      "4b9405b0-7788-4568-add1-99614e613b69": "Office 365 E1",
+      "c7df2760-2c81-4ef7-b578-5b5392b571df": "Microsoft 365 F3",
+      "e2b6c6e4-d6a9-4b07-bf44-138d3ef5d965": "Microsoft 365 Apps for business",
+      "de376a4f-8328-4fe1-9fdb-e4c6a986be04": "Enterprise Mobility + Security E5",
+      "b05e124f-c7cc-45a0-a6aa-8cf78c946968": "Microsoft Power BI Pro",
+      "e95bec33-7c88-4a70-8e19-a462dfa90fc5": "Microsoft Defender for Endpoint Plan 1",
+      "617b097b-4b93-4fae-9ddc-bebc77e68ee1": "Visio Plan 2"
+    };
+
+    let fullData = [];
+    let filteredData = [];
+    let currentPage = 1;
+    let rowsPerPage = 50;
+    let sortDirection = {};
+
+    function toggleJSON() {
+      const raw = document.getElementById("rawJson");
+      raw.style.display = raw.style.display === "block" ? "none" : "block";
     }
 
-    async function getLicensing() {
-      const tenantId = document.getElementById('tenantDropdown').value;
-      document.getElementById('output').textContent = 'Fetching data...';
+    function filterValidLicenses(user) {
+      const licenses = user.Licenses || [];
+      const hasValid = licenses.some(sku => sku && sku !== "None" && sku !== "-");
+      return hasValid;
+    }
+
+    async function fetchLicensing() {
+      const tenantId = document.getElementById("tenantDropdown").value;
+      const excludeEmpty = document.getElementById("excludeEmpty").checked;
+      const output = document.getElementById("rawJson");
+      const grid = document.getElementById("grid");
+      const download = document.getElementById("downloadBtn");
+      const csvBtn = document.getElementById("csvExportBtn");
+
+      output.textContent = "Fetching...";
+      output.style.display = "none";
+      grid.innerHTML = "";
+
       try {
-        const res = await fetch(`https://func-bbb-tenantapi.azurewebsites.net/api/GetLicensingData?${tenantId}`);
+        const res = await fetch(`https://func-bbb-tenantapi.azurewebsites.net/api/GetLicensingData?tenantId=${tenantId}`);
         const data = await res.json();
-        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+        fullData = data;
+        output.textContent = JSON.stringify(data, null, 2);
+        download.style.display = "inline";
+        download.href = "data:text/json;charset=utf-8," + encodeURIComponent(output.textContent);
+        csvBtn.style.display = "inline";
+        renderTable(excludeEmpty);
       } catch (err) {
-        document.getElementById('output').textContent = 'Error fetching data: ' + err;
+        output.textContent = "Error fetching data: " + err;
+        output.style.display = "block";
       }
     }
 
-    loadTenants();
+    function renderTable(excludeEmpty) {
+      const exclude = excludeEmpty || document.getElementById("excludeEmpty").checked;
+      filteredData = exclude ? fullData.filter(filterValidLicenses) : [...fullData];
+      currentPage = 1;
+      updateTable();
+    }
+
+    function updateTable() {
+      const tableContainer = document.getElementById("grid");
+      rowsPerPage = parseInt(document.getElementById("rowsPerPageSelect").value) || 50;
+      const start = (currentPage - 1) * rowsPerPage;
+      const end = start + rowsPerPage;
+      const paged = filteredData.slice(start, end);
+
+      let table = `<table><thead><tr>`;
+      const headers = ["Display Name", "User Principal Name", "Licenses", "Last Sign-In"];
+      const keyMap = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInDate"];
+
+      headers.forEach((h, i) => {
+        table += `<th class="sortable" onclick="sortBy(${i})">${h}
+                  <br/><input class="column-filter" oninput="filterColumn(${i}, this.value)" /></th>`;
+      });
+      table += `</tr></thead><tbody>`;
+
+      paged.forEach(u => {
+        const licenses = (u.Licenses || []).map(sku => licenseLookup[sku] || `Unmapped SKU: ${sku}`).join(", ") || "-";
+        table += `<tr>
+          <td>${u.DisplayName || ""}</td>
+          <td>${u.UserPrincipalName || ""}</td>
+          <td>${licenses}</td>
+          <td>${u.LastSignInDate || ""}</td>
+        </tr>`;
+      });
+
+      table += "</tbody></table>";
+      tableContainer.innerHTML = table;
+
+      const pagination = document.getElementById("pagination");
+      const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+      pagination.innerHTML = "";
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement("button");
+        btn.textContent = i;
+        if (i === currentPage) btn.disabled = true;
+        btn.onclick = () => { currentPage = i; updateTable(); };
+        pagination.appendChild(btn);
+      }
+    }
+
+    function sortBy(index) {
+      const keyMap = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInDate"];
+      const key = keyMap[index];
+      const direction = sortDirection[key] = !(sortDirection[key]);
+
+      filteredData.sort((a, b) => {
+        const valA = key === "Licenses"
+          ? (a.Licenses || []).join(", ")
+          : a[key] || "";
+        const valB = key === "Licenses"
+          ? (b.Licenses || []).join(", ")
+          : b[key] || "";
+        return direction
+          ? valA.localeCompare(valB)
+          : valB.localeCompare(valA);
+      });
+
+      currentPage = 1;
+      updateTable();
+    }
+
+    function filterColumn(index, value) {
+      const keyMap = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInDate"];
+      const key = keyMap[index];
+      filteredData = fullData.filter(u => {
+        const val = key === "Licenses"
+          ? (u.Licenses || []).map(s => licenseLookup[s] || `Unmapped SKU: ${s}`).join(", ")
+          : u[key] || "";
+        return val.toLowerCase().includes(value.toLowerCase());
+      });
+
+      if (document.getElementById("excludeEmpty").checked)
+        filteredData = filteredData.filter(filterValidLicenses);
+
+      currentPage = 1;
+      updateTable();
+    }
+
+    function exportFilteredCSV() {
+      const rows = [
+        ["Display Name", "User Principal Name", "Licenses", "Last Sign-In"]
+      ];
+      filteredData.forEach(u => {
+        const licenses = (u.Licenses || []).map(s => licenseLookup[s] || `Unmapped SKU: ${s}`).join(", ") || "-";
+        rows.push([u.DisplayName, u.UserPrincipalName, licenses, u.LastSignInDate || ""]);
+      });
+
+      const csv = rows.map(r => r.map(f => `"${(f || "").replace(/"/g, '""')}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "FilteredLicensing.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    async function populateTenants() {
+      const dropdown = document.getElementById("tenantDropdown");
+      const res = await fetch("https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants");
+      const tenants = await res.json();
+      dropdown.innerHTML = tenants.map(t => `<option value="${t.TenantId}">${t.TenantName} (${t.TenantId})</option>`).join("");
+    }
+
+    document.getElementById("rowsPerPageSelect").addEventListener("change", () => updateTable());
+    populateTenants();
   </script>
 </body>
 </html>

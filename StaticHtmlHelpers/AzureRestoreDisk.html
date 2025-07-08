@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BBBRestoreDisk</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f5f8fb;
+      color: #1f2d3d;
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+    }
+    input, select, button {
+      margin-top: 10px;
+      padding: 8px;
+      width: 100%;
+      font-size: 14px;
+    }
+    label {
+      font-weight: bold;
+      margin-top: 15px;
+      display: block;
+    }
+    .sample {
+      background-color: #eef4ff;
+      padding: 10px;
+      border-left: 4px solid #0078d4;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>💽 Azure VM Disk Restore - BBBRestoreDisk</h2>
+
+  <label for="vaultName">Vault Name:</label>
+  <input type="text" id="vaultName" value="vault702" />
+
+  <label for="vaultRG">Vault Resource Group:</label>
+  <input type="text" id="vaultRG" value="rsg-bitxbit-servers" />
+
+  <label for="containerName">Container Name:</label>
+  <input type="text" id="containerName" value="az-nylocal246-prod" />
+
+  <label for="itemName">Item Name:</label>
+  <input type="text" id="itemName" value="az-nylocal246-prod" />
+
+  <label for="recoveryPointId">Recovery Point ID:</label>
+  <input type="text" id="recoveryPointId" value="5422470002920195644" />
+
+  <label for="targetStorageAccount">Target Storage Account:</label>
+  <input type="text" id="targetStorageAccount" value="sarecovery20250701" />
+
+  <label for="storageRG">Storage Account Resource Group:</label>
+  <input type="text" id="storageRG" value="rg-recovery20250701-jjs" />
+
+  <label for="targetRG">Target Resource Group for Disks:</label>
+  <input type="text" id="targetRG" value="rg-recovery20250701-jjs" />
+
+  <button onclick="showSummary()">Show Summary</button>
+
+  <div id="summary" class="sample" style="display:none;"></div>
+
+  <script>
+    function showSummary() {
+      const vault = document.getElementById("vaultName").value.trim();
+      const vaultRG = document.getElementById("vaultRG").value.trim();
+      const container = document.getElementById("containerName").value.trim();
+      const item = document.getElementById("itemName").value.trim();
+      const rp = document.getElementById("recoveryPointId").value.trim();
+      const storage = document.getElementById("targetStorageAccount").value.trim();
+      const storageRG = document.getElementById("storageRG").value.trim();
+      const targetRG = document.getElementById("targetRG").value.trim();
+
+      const summary = `
+        <strong>CLI Command:</strong><br/><br/>
+        <code>az backup restore restore-disks \\<br/>
+        &nbsp;&nbsp;--vault-name ${vault} \\<br/>
+        &nbsp;&nbsp;--resource-group ${vaultRG} \\<br/>
+        &nbsp;&nbsp;--container-name ${container} \\<br/>
+        &nbsp;&nbsp;--item-name ${item} \\<br/>
+        &nbsp;&nbsp;--rp-name ${rp} \\<br/>
+        &nbsp;&nbsp;--storage-account ${storage} \\<br/>
+        &nbsp;&nbsp;--storage-account-resource-group ${storageRG} \\<br/>
+        &nbsp;&nbsp;--target-resource-group ${targetRG} \\<br/>
+        &nbsp;&nbsp;--restore-to-staging-storage-account true</code>
+      `;
+
+      const box = document.getElementById("summary");
+      box.innerHTML = summary;
+      box.style.display = "block";
+    }
+  </script>
+</body>
+</html>
