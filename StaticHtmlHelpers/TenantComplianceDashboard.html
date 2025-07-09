@@ -8,9 +8,13 @@
       font-family: Arial, sans-serif;
       margin: 20px;
       background-color: #f4f4f4;
+      font-size: 13px;
     }
     h1 {
       color: #333;
+    }
+    .controls {
+      margin-bottom: 10px;
     }
     table {
       width: 100%;
@@ -18,7 +22,7 @@
       background: white;
     }
     th, td {
-      padding: 10px;
+      padding: 8px;
       border-bottom: 1px solid #ccc;
       text-align: left;
     }
@@ -26,7 +30,7 @@
       background-color: #f0f0f0;
     }
     .status {
-      font-size: 1.2em;
+      font-size: 1.1em;
     }
     .status.active {
       color: green;
@@ -34,48 +38,121 @@
     .status.inactive {
       color: red;
     }
+    .status.backup {
+      font-size: 1.1em;
+    }
+    .status.backup-true {
+      color: #007bff;
+    }
+    .status.backup-false {
+      color: #aaa;
+    }
     button {
-      padding: 10px 15px;
+      padding: 6px 10px;
       background-color: #0078D4;
       color: white;
       border: none;
       cursor: pointer;
       border-radius: 5px;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
     }
     button:disabled {
       opacity: 0.6;
+    }
+    select {
+      margin-right: 10px;
+    }
+    .instructions {
+      margin-bottom: 15px;
+      background: #fff;
+      padding: 10px;
+      border-left: 4px solid #0078D4;
+      display: none;
+    }
+    .footer {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
     }
   </style>
 </head>
 <body>
   <h1>Tenant Compliance Dashboard</h1>
-  <button onclick="recheckCompliance()">🔄 Recheck Compliance</button>
-  <table>
-    <thead>
-      <tr>
-        <th>Tenant Name</th>
-        <th>Tenant ID</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody id="tenantTable"></tbody>
-  </table>
+
+  <div class="controls">
+    <button onclick="recheckCompliance()">🔄 Recheck Compliance</button>
+    <select id="statusFilter" onchange="loadTenants()">
+      <option value="all">Show All</option>
+      <option value="compliant">Only Compliant</option>
+      <option value="noncompliant">Only Non-Compliant</option>
+    </select>
+    <select id="backupFilter" onchange="loadTenants()">
+      <option value="all">All Backups</option>
+      <option value="withbackup">Only with Backup</option>
+      <option value="withoutbackup">Only without Backup</option>
+    </select>
+    <select id="columnsSelect" onchange="adjustColumns()">
+      <option value="2">2 Columns</option>
+      <option value="4" selected>4 Columns</option>
+      <option value="6">6 Columns</option>
+      <option value="8">8 Columns</option>
+    </select>
+  </div>
+
+  <div>
+    <button onclick="toggleInstructions('licensingInstructions')">ℹ️ MS Licensing & Patch Status Consent</button>
+    <div id="licensingInstructions" class="instructions">
+      <p>Have a Global Admin log into an <strong>Incognito</strong> window and visit:</p>
+      <code>https://login.microsoftonline.com/common/adminconsent?client_id=7f6d81f7-cbca-400b-95a8-350f8d4a34a1</code>
+      <p>This grants consent for the app that checks MS Licensing and OS Patch Statuses.</p>
+    </div>
+
+    <button onclick="toggleInstructions('backupInstructions')">💾 Backup App Consent</button>
+    <div id="backupInstructions" class="instructions">
+      <p>Have a Global Admin log into an <strong>Incognito</strong> window and visit:</p>
+      <code>https://login.microsoftonline.com/common/adminconsent?client_id=a564e03e-5a3f-42d3-8836-a021f2ef7e0c</code>
+      <p>This grants consent for the Backup checking app.</p>
+    </div>
+  </div>
+
+  <div id="tenantGrid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px;"></div>
+
+  <div class="footer">Version 2025-07-09.1</div>
 
   <script>
+    function toggleInstructions(id) {
+      const el = document.getElementById(id);
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function adjustColumns() {
+      const cols = document.getElementById('columnsSelect').value;
+      document.getElementById('tenantGrid').style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    }
+
     async function loadTenants() {
+      const statusFilter = document.getElementById('statusFilter').value;
+      const backupFilter = document.getElementById('backupFilter').value;
       const res = await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants');
       const tenants = await res.json();
-      const tbody = document.getElementById('tenantTable');
-      tbody.innerHTML = '';
+      const grid = document.getElementById('tenantGrid');
+      grid.innerHTML = '';
+
       tenants.forEach(t => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${t.TenantName}</td>
-          <td>${t.TenantId}</td>
-          <td class="status ${t.IsActive ? 'active' : 'inactive'}">${t.IsActive ? '✅' : '❌'}</td>
+        if ((statusFilter === 'compliant' && !t.IsActive) || (statusFilter === 'noncompliant' && t.IsActive)) return;
+        if ((backupFilter === 'withbackup' && !t.IsBackup) || (backupFilter === 'withoutbackup' && t.IsBackup)) return;
+
+        const card = document.createElement('div');
+        card.style.background = 'white';
+        card.style.border = '1px solid #ccc';
+        card.style.borderRadius = '6px';
+        card.style.padding = '10px';
+        card.innerHTML = `
+          <strong>${t.TenantName}</strong><br>
+          <span class="status ${t.IsActive ? 'active' : 'inactive'}">${t.IsActive ? '✅' : '❌'}</span>
+          <span class="status backup-${t.IsBackup ? 'true' : 'false'}">${t.IsBackup ? '💾' : '🚫'}</span>
         `;
-        tbody.appendChild(tr);
+        grid.appendChild(card);
       });
     }
 

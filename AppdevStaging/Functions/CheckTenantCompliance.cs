@@ -16,12 +16,16 @@ public class CheckTenantCompliance
     private readonly string _clientId;
     private readonly string _clientSecret;
     private readonly string _graphAppId = "7f6d81f7-cbca-400b-95a8-350f8d4a34a1";
+    private readonly string _backupAppId;
+    private readonly string _backupAppSecret;
 
     public CheckTenantCompliance()
     {
         _connectionString = "Server=tcp:bbbai.database.windows.net,1433;Initial Catalog=bbbazuredb;";
         _clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
         _clientSecret = Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
+        _backupAppId = Environment.GetEnvironmentVariable("backup_appid");
+        _backupAppSecret = Environment.GetEnvironmentVariable("backup_appid_secret");
     }
 
     [Function("CheckTenantCompliance")]
@@ -51,7 +55,7 @@ public class CheckTenantCompliance
                 {
                     tenantRecords.Add((reader["TenantId"].ToString(), reader["TenantName"].ToString()));
                 }
-            } // Reader and connection disposed here
+            }
 
             var updatedTenants = new List<string>();
 
@@ -62,7 +66,9 @@ public class CheckTenantCompliance
                 foreach (var (tenantId, tenantName) in tenantRecords)
                 {
                     logger.LogInformation("🔍 Checking tenant {0} - {1}", tenantName, tenantId);
+
                     bool isCompliant = false;
+                    bool isBackup = false;
 
                     try
                     {
@@ -84,13 +90,34 @@ public class CheckTenantCompliance
                         logger.LogWarning("⚠️ Error checking consent for tenant {0}: {1}", tenantId, ex.Message);
                     }
 
+                    try
+                    {
+                        var backupGraphCredential = new ClientSecretCredential(tenantId, _backupAppId, _backupAppSecret);
+                        var backupGraphClient = new GraphServiceClient(backupGraphCredential);
+
+                        var backupPrincipals = await backupGraphClient.ServicePrincipals
+                            .GetAsync(config =>
+                            {
+                                config.QueryParameters.Filter = $"appId eq '{_backupAppId}'";
+                                config.QueryParameters.Select = new[] { "id" };
+                            });
+
+                        isBackup = backupPrincipals?.Value?.Count > 0;
+                        logger.LogInformation("💾 Tenant {0} backup compliance: {1}", tenantName, isBackup);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning("⚠️ Error checking backup consent for tenant {0}: {1}", tenantId, ex.Message);
+                    }
+
                     var updateCommand = connection.CreateCommand();
-                    updateCommand.CommandText = "UPDATE Tenants SET IsActive = @isActive WHERE TenantId = @tenantId";
+                    updateCommand.CommandText = "UPDATE Tenants SET IsActive = @isActive, IsBackup = @isBackup WHERE TenantId = @tenantId";
                     updateCommand.Parameters.AddWithValue("@isActive", isCompliant);
+                    updateCommand.Parameters.AddWithValue("@isBackup", isBackup);
                     updateCommand.Parameters.AddWithValue("@tenantId", tenantId);
                     await updateCommand.ExecuteNonQueryAsync();
 
-                    updatedTenants.Add($"{tenantName} ({tenantId}): {(isCompliant ? "✅" : "❌")}");
+                    updatedTenants.Add($"{tenantName} ({tenantId}): {(isCompliant ? "✅" : "❌")} / Backup: {(isBackup ? "✅" : "❌")}");
                 }
             }
 

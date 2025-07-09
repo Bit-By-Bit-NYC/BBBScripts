@@ -40,7 +40,7 @@ public class GetTenants
             await connection.OpenAsync();
 
             var command = connection.CreateCommand();
-            command.CommandText = "SELECT TenantName, TenantId, IsActive FROM Tenants";
+            command.CommandText = "SELECT TenantName, TenantId, IsActive, IsBackup FROM Tenants";
 
             var tenants = new List<Dictionary<string, object>>();
             using var reader = await command.ExecuteReaderAsync();
@@ -50,7 +50,8 @@ public class GetTenants
                 {
                     { "TenantName", reader["TenantName"].ToString() },
                     { "TenantId", reader["TenantId"].ToString() },
-                    { "IsActive", (bool)reader["IsActive"] }
+                    { "IsActive", (bool)reader["IsActive"] },
+                    { "IsBackup", (bool)reader["IsBackup"] }
                 });
             }
 

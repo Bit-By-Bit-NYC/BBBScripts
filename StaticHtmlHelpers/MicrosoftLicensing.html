@@ -39,7 +39,7 @@
   <div id="grid"></div>
   <div class="pagination" id="pagination"></div>
 
-  <footer><small>Last updated: 2025-07-08 | Revision 1.7</small></footer>
+  <footer><small>Last updated: 2025-07-09 | Revision 1.8</small></footer>
 
   <script>
     const licenseLookup = {
@@ -70,8 +70,7 @@
 
     function filterValidLicenses(user) {
       const licenses = user.Licenses || [];
-      const hasValid = licenses.some(sku => sku && sku !== "None" && sku !== "-");
-      return hasValid;
+      return licenses.some(sku => sku && sku !== "None" && sku !== "-");
     }
 
     async function fetchLicensing() {
@@ -156,12 +155,8 @@
       const direction = sortDirection[key] = !(sortDirection[key]);
 
       filteredData.sort((a, b) => {
-        const valA = key === "Licenses"
-          ? (a.Licenses || []).join(", ")
-          : a[key] || "";
-        const valB = key === "Licenses"
-          ? (b.Licenses || []).join(", ")
-          : b[key] || "";
+        const valA = key === "Licenses" ? (a.Licenses || []).join(", ") : a[key] || "";
+        const valB = key === "Licenses" ? (b.Licenses || []).join(", ") : b[key] || "";
         return direction
           ? valA.localeCompare(valB)
           : valB.localeCompare(valA);
@@ -189,9 +184,7 @@
     }
 
     function exportFilteredCSV() {
-      const rows = [
-        ["Display Name", "User Principal Name", "Licenses", "Last Sign-In"]
-      ];
+      const rows = [["Display Name", "User Principal Name", "Licenses", "Last Sign-In"]];
       filteredData.forEach(u => {
         const licenses = (u.Licenses || []).map(s => licenseLookup[s] || `Unmapped SKU: ${s}`).join(", ") || "-";
         rows.push([u.DisplayName, u.UserPrincipalName, licenses, u.LastSignInDate || ""]);
@@ -212,7 +205,11 @@
       const dropdown = document.getElementById("tenantDropdown");
       const res = await fetch("https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants");
       const tenants = await res.json();
-      dropdown.innerHTML = tenants.map(t => `<option value="${t.TenantId}">${t.TenantName} (${t.TenantId})</option>`).join("");
+      const activeTenants = tenants.filter(t => t.IsActive);
+      activeTenants.sort((a, b) => a.TenantName.localeCompare(b.TenantName));
+      dropdown.innerHTML = activeTenants
+        .map(t => `<option value="${t.TenantId}">${t.TenantName} (${t.TenantId})</option>`)
+        .join("");
     }
 
     document.getElementById("rowsPerPageSelect").addEventListener("change", () => updateTable());
