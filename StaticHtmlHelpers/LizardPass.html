@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Password & Passphrase Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom transition for the generated password display */
+        #password-display {
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .flash-success {
+            background-color: #22c55e !important; /* Tailwind green-500 */
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-lg mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">🦎🔒 Password Generator</h1>
+            <p class="mt-2 text-gray-600">Create secure, memorable passwords and passphrases in a snap.</p>
+        </header>
+
+        <main class="bg-white p-6 md:p-8 rounded-2xl shadow-lg">
+            
+            <!-- Generated Password Display -->
+            <div class="mb-6">
+                <label for="password-display" class="block text-sm font-medium text-gray-700 mb-2">Your New Password:</label>
+                <div class="relative">
+                    <input id="password-display" type="text" readonly class="w-full bg-gray-100 text-gray-900 text-lg md:text-xl font-mono p-4 rounded-lg border-2 border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-center" value="Generating...">
+                    <button id="copy-button" title="Copy to Clipboard" class="absolute top-1/2 right-3 -translate-y-1/2 text-gray-500 hover:text-indigo-600 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-copy"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                </div>
+                <div id="copy-feedback" class="text-center text-sm text-green-600 mt-2 h-5"></div>
+            </div>
+
+            <!-- Options -->
+            <div class="mb-6">
+                 <fieldset>
+                    <legend class="block text-sm font-medium text-gray-700 mb-3 text-center">Generation Type</legend>
+                    <div class="flex justify-center gap-4">
+                        <label for="type-password" class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg border-2 border-gray-200 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-500 transition-all">
+                            <input type="radio" id="type-password" name="generation-type" value="password" class="form-radio h-4 w-4 text-indigo-600 focus:ring-indigo-500" checked>
+                            <span class="text-gray-800">Password</span>
+                        </label>
+                        <label for="type-passphrase" class="flex items-center space-x-2 cursor-pointer p-3 rounded-lg border-2 border-gray-200 has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-500 transition-all">
+                            <input type="radio" id="type-passphrase" name="generation-type" value="passphrase" class="form-radio h-4 w-4 text-indigo-600 focus:ring-indigo-500">
+                             <span class="text-gray-800">Passphrase</span>
+                        </label>
+                    </div>
+                </fieldset>
+            </div>
+
+            <!-- Generate Button -->
+            <div class="mt-8">
+                <button id="generate-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    ✨ Generate New
+                </button>
+            </div>
+        </main>
+
+        <footer class="text-center mt-8 text-sm text-gray-500">
+            <p>&copy; 2025 Bit by Bit Computer Consultants, All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const passwordDisplay = document.getElementById('password-display');
+            const generateButton = document.getElementById('generate-button');
+            const copyButton = document.getElementById('copy-button');
+            const copyFeedback = document.getElementById('copy-feedback');
+
+            // --- Word Lists (Shortened for brevity) ---
+            // A larger, more diverse list would be used in a production environment.
+            const commonWords = [
+                "apple", "banana", "cherry", "dragon", "eagle", "falcon", "galaxy", "harbor", "igloo", "journey", 
+                "kayak", "lemon", "mango", "nectar", "ocean", "pencil", "quilt", "river", "sunset", "tiger",
+                "umbra", "viper", "walrus", "xenon", "yacht", "zebra", "acorn", "breeze", "cloud", "diamond"
+            ];
+
+            const adjectives = [
+                "blue", "fast", "silly", "brave", "calm", "dark", "early", "fancy", "giant", "happy", "jolly",
+                "kind", "lazy", "magic", "noble", "open", "proud", "quick", "red", "shiny", "tall", "vast"
+            ];
+
+            const nouns = [
+                "stone", "tree", "house", "boat", "car", "dog", "cat", "bird", "fish", "star", "moon", "sun",
+                "key", "lock", "pen", "book", "cup", "hat", "shoe", "sock", "ball", "box", "desk", "chair"
+            ];
+            
+            // --- Character Replacements ---
+            const replacements = {
+                'a': '@', 'e': '3', 'i': '1', 'o': '0', 's': '$', 'l': 'l', 't': '7'
+            };
+
+            // --- Utility Functions ---
+            const getRandomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+            const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+            // --- Core Generation Logic ---
+
+            /**
+             * Generates a password with character substitutions.
+             * e.g., "FastDragon" -> "F@stDr@g0n7"
+             */
+            function generatePassword() {
+                const numWords = Math.random() < 0.7 ? 2 : 3; // 70% chance of 2 words
+                let passwordParts = [];
+                for (let i = 0; i < numWords; i++) {
+                    const word = getRandomItem(commonWords);
+                    let transformedWord = '';
+                    for (const char of word) {
+                        // Apply replacement with a 50% chance if applicable
+                        if (replacements[char] && Math.random() > 0.5) {
+                            transformedWord += replacements[char];
+                        } else {
+                            transformedWord += char;
+                        }
+                    }
+                    passwordParts.push(capitalize(transformedWord));
+                }
+                // Add a random number at the end for extra strength
+                const finalPassword = passwordParts.join('') + Math.floor(Math.random() * 10);
+                return finalPassword;
+            }
+
+            /**
+             * Generates a passphrase from adjectives and nouns.
+             * e.g., "Brave-Blue-Stone-Key"
+             */
+            function generatePassphrase() {
+                const parts = [
+                    capitalize(getRandomItem(adjectives)),
+                    capitalize(getRandomItem(adjectives)),
+                    capitalize(getRandomItem(nouns)),
+                    capitalize(getRandomItem(nouns)),
+                ];
+                return parts.join('-');
+            }
+            
+            /**
+             * Main function to update the display based on selected type.
+             */
+            function updatePasswordDisplay() {
+                const selectedType = document.querySelector('input[name="generation-type"]:checked').value;
+                let newPassword = '';
+
+                if (selectedType === 'password') {
+                    newPassword = generatePassword();
+                } else {
+                    newPassword = generatePassphrase();
+                }
+
+                passwordDisplay.value = newPassword;
+                
+                // Add a subtle animation to indicate change
+                passwordDisplay.classList.add('flash-success');
+                setTimeout(() => {
+                    passwordDisplay.classList.remove('flash-success');
+                }, 300);
+            }
+
+            // --- Event Listeners ---
+            generateButton.addEventListener('click', updatePasswordDisplay);
+
+            copyButton.addEventListener('click', () => {
+                // The select() and execCommand approach is used for broad compatibility,
+                // especially within sandboxed environments like iframes.
+                passwordDisplay.select();
+                passwordDisplay.setSelectionRange(0, 99999); // For mobile devices
+
+                try {
+                    document.execCommand('copy');
+                    copyFeedback.textContent = 'Copied to clipboard! 👍';
+                } catch (err) {
+                    copyFeedback.textContent = 'Could not copy.';
+                    console.error('Fallback: Oops, unable to copy', err);
+                }
+
+                // Clear feedback message after a few seconds
+                setTimeout(() => {
+                    copyFeedback.textContent = '';
+                }, 3000);
+            });
+            
+            // Add listeners to radio buttons to regenerate on change
+            document.querySelectorAll('input[name="generation-type"]').forEach(radio => {
+                radio.addEventListener('change', updatePasswordDisplay);
+            });
+
+            // --- Initial Load ---
+            updatePasswordDisplay();
+        });
+    </script>
+</body>
+</html>

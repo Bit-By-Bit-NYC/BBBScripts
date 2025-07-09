@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Local Triage Bot Tester</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; }
+    textarea, pre { width: 100%; box-sizing: border-box; }
+    textarea { height: 120px; font-family: monospace; }
+    pre { background: #f4f4f4; padding: 1rem; white-space: pre-wrap; border: 1px solid #ccc; }
+    button { padding: 0.5rem 1rem; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Test Local Helpdesk Triage Bot</h1>
+  <label for="problem">Problem Summary:</label><br>
+  <textarea id="problem"></textarea><br>
+  <button onclick="submitProblem()">Submit to Local Bot</button>
+  <h2>Response</h2>
+  <pre id="response">Waiting for input...</pre>
+
+  <script>
+    async function submitProblem() {
+      const problem = document.getElementById("problem").value.trim();
+      const responseEl = document.getElementById("response");
+      responseEl.textContent = "Sending request...";
+      
+
+      try {
+        const res = await fetch("https://triage-bot-func.azurewebsites.net/api/triage?code=c6pDCuLBfHmbltEdTlWviJ_eVRZFeUqDo3Dg9aJAg2GWAzFuDjUJpw==", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ problem_summary: problem })
+        });
+
+        const data = await res.json();
+        responseEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        responseEl.textContent = `Request failed:\n${err.message}`;
+      }
+    }
+  </script>
+</body>
+</html>

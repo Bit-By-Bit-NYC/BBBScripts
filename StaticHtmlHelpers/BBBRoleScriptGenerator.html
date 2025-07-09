@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerShell Custom Role Script Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Simple transition for a smoother feel */
+        .transition-all {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-10 space-y-8">
+        
+        <!-- Header Section -->
+        <div>
+            <h1 class="text-3xl md:text-4xl font-bold text-center text-white">BBB Azure RBAC helper</h1>
+            <p class="text-center text-gray-400 mt-2">Enter a subscription ID to generate the custom role creation script.</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="space-y-4">
+            <label for="subscriptionId" class="block text-lg font-medium text-gray-300">Client Subscription ID:</label>
+            <input type="text" id="subscriptionId" placeholder="e.g., 00000000-0000-0000-0000-000000000000" class="w-full bg-gray-700 border-2 border-gray-600 text-white rounded-lg p-4 focus:ring-4 focus:ring-blue-500 focus:border-blue-500 transition-all text-lg">
+            <button id="generateBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg text-xl transition-all shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-500">
+                Generate Script
+            </button>
+        </div>
+
+        <!-- Output Section -->
+        <div id="outputContainer" class="hidden space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-white">Generated PowerShell Script:</h2>
+                <button id="copyBtn" class="bg-gray-600 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition-all focus:outline-none focus:ring-4 focus:ring-green-500">
+                    Copy to Clipboard
+                </button>
+            </div>
+            <pre class="bg-gray-900 rounded-lg p-4 overflow-x-auto"><code id="scriptOutput" class="language-powershell text-sm"></code></pre>
+        </div>
+
+    </div>
+
+    <script>
+        const subscriptionIdInput = document.getElementById('subscriptionId');
+        const generateBtn = document.getElementById('generateBtn');
+        const outputContainer = document.getElementById('outputContainer');
+        const scriptOutput = document.getElementById('scriptOutput');
+        const copyBtn = document.getElementById('copyBtn');
+
+        // This function holds the PowerShell script as a template string.
+        function getScriptTemplate(subscriptionId) {
+            // Using a template literal (`) allows for easy multiline strings and variable injection.
+            return `<#
+.SYNOPSIS
+    Creates three custom Azure RBAC roles for resource management.
+
+.DESCRIPTION
+    This PowerShell script defines and creates three custom security roles within a specified Azure subscription:
+    1. BBB- Azure Reader - Helpdesk Tier 1
+    2. BBB- Azure Operator - Tier 2
+    3. BBB- Azure Architect
+
+.NOTES
+    Prerequisites:
+    1. Azure PowerShell Az module installed (Install-Module -Name Az -AllowClobber -Scope CurrentUser)
+    2. Connected to Azure (Connect-AzAccount)
+    3. Appropriate permissions to create role definitions, such as Owner or User Access Administrator.
+
+    Instructions:
+    1. ❗️ IMPORTANT: This script uses the subscription ID provided below.
+    2. ❗️ IMPORTANT: Set your context to the correct subscription using:
+       Set-AzContext -Subscription "${subscriptionId}"
+    3. Run the script from your PowerShell terminal.
+#>
+
+# --- Subscription ID Parameter ---
+$subscriptionId = "${subscriptionId}"
+# -----------------------------
+
+Write-Host "✨ Starting custom Azure RBAC role creation process..." -ForegroundColor Cyan
+Write-Host "Target Subscription ID: $subscriptionId"
+Write-Host "--------------------------------------------------"
+
+try {
+    # Set the context to the target subscription. Fails script if subscription is not found.
+    Set-AzContext -Subscription $subscriptionId -ErrorAction Stop | Out-Null
+
+    # ==============================================================================
+    # == ☁️ SECTION 1: AZURE RBAC (RESOURCE) CUSTOM ROLES                     ==
+    # ==============================================================================
+    Write-Host "▶️ Processing Azure RBAC Custom Roles..." -ForegroundColor Green
+
+    # --- Role 1: Azure Reader - Helpdesk Tier 1 ---
+    $roleNameT1 = "BBB- Azure Reader - Helpdesk Tier 1"
+    if (-not (Get-AzRoleDefinition -Name $roleNameT1 -Scope "/subscriptions/$subscriptionId" -ErrorAction SilentlyContinue)) {
+        Write-Host "   - Defining '$roleNameT1'..."
+        $roleDefT1 = New-Object -TypeName Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition
+        $roleDefT1.Name = $roleNameT1
+        $roleDefT1.Description = "Allows viewing of Azure resources and their status, primarily for initial assessment and ticket routing. No modification rights."
+        $roleDefT1.IsCustom = $true
+        $roleDefT1.AssignableScopes = @("/subscriptions/$subscriptionId")
+        $roleDefT1.Actions = @(
+            "Microsoft.Resources/subscriptions/resourceGroups/read",
+            "Microsoft.Compute/virtualMachines/read",
+            "Microsoft.Compute/virtualMachines/instanceView/read",
+            "Microsoft.Storage/storageAccounts/read",
+            "Microsoft.Network/virtualNetworks/read",
+            "Microsoft.Network/networkInterfaces/read",
+            "Microsoft.Network/networkWatchers/read",
+            "Microsoft.ResourceHealth/availabilityStatuses/read",
+            "Microsoft.Insights/logs/read",
+            "Microsoft.Support/supportTickets/read"
+        )
+        Write-Host "   - Creating '$roleNameT1' role..."
+        New-AzRoleDefinition -Role $roleDefT1
+        Write-Host "   ✅ '$roleNameT1' created successfully." -ForegroundColor Green
+    }
+    else {
+        Write-Host "   ⚠️ Role '$roleNameT1' already exists. Skipping creation." -ForegroundColor Yellow
+    }
+    Write-Host ""
+
+
+    # --- Role 2: Azure Operator - Tier 2 ---
+    $roleNameT2 = "BBB- Azure Operator - Tier 2"
+    if (-not (Get-AzRoleDefinition -Name $roleNameT2 -Scope "/subscriptions/$subscriptionId" -ErrorAction SilentlyContinue)) {
+        Write-Host "   - Defining '$roleNameT2'..."
+        $roleDefT2 = New-Object -TypeName Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition
+        $roleDefT2.Name = $roleNameT2
+        $roleDefT2.Description = "Allows management of specific Azure resources, including starting/stopping VMs, managing snapshots, and basic network configurations."
+        $roleDefT2.IsCustom = $true
+        $roleDefT2.AssignableScopes = @("/subscriptions/$subscriptionId")
+        $roleDefT2.Actions = @(
+            "Microsoft.Resources/subscriptions/resourceGroups/read",
+            "Microsoft.Compute/virtualMachines/read",
+            "Microsoft.Compute/virtualMachines/instanceView/read",
+            "Microsoft.Storage/storageAccounts/read",
+            "Microsoft.Network/virtualNetworks/read",
+            "Microsoft.Network/networkInterfaces/read",
+            "Microsoft.Network/networkWatchers/read",
+            "Microsoft.ResourceHealth/availabilityStatuses/read",
+            "Microsoft.Insights/logs/read",
+            "Microsoft.Support/supportTickets/read",
+            "Microsoft.Compute/virtualMachines/start/action",
+            "Microsoft.Compute/virtualMachines/restart/action",
+            "Microsoft.Compute/virtualMachines/deallocate/action",
+            "Microsoft.Compute/virtualMachines/redeploy/action",
+            "Microsoft.Compute/virtualMachines/write",
+            "Microsoft.Compute/disks/read",
+            "Microsoft.Compute/disks/write",
+            "Microsoft.Compute/snapshots/read",
+            "Microsoft.Compute/snapshots/write",
+            "Microsoft.Storage/storageAccounts/listkeys/action",
+            "Microsoft.Network/networkInterfaces/join/action",
+            "Microsoft.Network/networkSecurityGroups/read",
+            "Microsoft.Network/networkSecurityGroups/write",
+            "Microsoft.Network/publicIPAddresses/read",
+            "Microsoft.Network/publicIPAddresses/write",
+            "Microsoft.Insights/diagnosticSettings/read",
+            "Microsoft.Insights/diagnosticSettings/write",
+            "Microsoft.Resources/deployments/read",
+            "Microsoft.Resources/deployments/operations/read"
+        )
+        Write-Host "   - Creating '$roleNameT2' role..."
+        New-AzRoleDefinition -Role $roleDefT2
+        Write-Host "   ✅ '$roleNameT2' created successfully." -ForegroundColor Green
+    }
+    else {
+        Write-Host "   ⚠️ Role '$roleNameT2' already exists. Skipping creation." -ForegroundColor Yellow
+    }
+    Write-Host ""
+
+
+    # --- Role 3: Azure Architect ---
+    $roleNameT3 = "BBB- Azure Architect"
+    if (-not (Get-AzRoleDefinition -Name $roleNameT3 -Scope "/subscriptions/$subscriptionId" -ErrorAction SilentlyContinue)) {
+        Write-Host "   - Defining '$roleNameT3'..."
+        $roleDefT3 = New-Object -TypeName Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition
+        $roleDefT3.Name = $roleNameT3
+        $roleDefT3.Description = "Provides permissions to design, deploy, and manage Azure infrastructure and services, including network, compute, storage, and governance tools."
+        $roleDefT3.IsCustom = $true
+        $roleDefT3.AssignableScopes = @("/subscriptions/$subscriptionId")
+        $roleDefT3.Actions = @(
+            "Microsoft.Compute/*",
+            "Microsoft.Network/*",
+            "Microsoft.Storage/*",
+            "Microsoft.Sql/*",
+            "Microsoft.Web/*",
+            "Microsoft.ContainerService/*",
+            "Microsoft.KeyVault/*",
+            "Microsoft.Resources/subscriptions/resourceGroups/write",
+            "Microsoft.Resources/subscriptions/resourceGroups/delete",
+            "Microsoft.Authorization/policyAssignments/*",
+            "Microsoft.Authorization/policyDefinitions/*",
+            "Microsoft.Authorization/roleDefinitions/read",
+            "Microsoft.Authorization/roleAssignments/read",
+            "Microsoft.Management/managementGroups/read",
+            "Microsoft.Management/managementGroups/write",
+            "Microsoft.Blueprint/blueprints/*",
+            "Microsoft.Insights/actionGroups/*",
+            "Microsoft.CostManagement/exports/*",
+            "Microsoft.Support/*"
+        )
+        Write-Host "   - Creating '$roleNameT3' role..."
+        New-AzRoleDefinition -Role $roleDefT3
+        Write-Host "   ✅ '$roleNameT3' created successfully." -ForegroundColor Green
+    }
+    else {
+        Write-Host "   ⚠️ Role '$roleNameT3' already exists. Skipping creation." -ForegroundColor Yellow
+    }
+    Write-Host "--------------------------------------------------"
+
+    Write-Host "🎉 Script finished processing." -ForegroundColor Cyan
+
+}
+catch {
+    Write-Error ("An error occurred: " + $_.Exception.Message)
+}
+`;
+        }
+
+        // Event listener for the generate button
+        generateBtn.addEventListener('click', () => {
+            let subId = subscriptionIdInput.value.trim();
+            if (subId === '') {
+                subId = '00000000-0000-0000-0000-000000000000'; // Default placeholder
+            }
+            
+            // Get the formatted script
+            const finalScript = getScriptTemplate(subId);
+
+            // Display the script
+            scriptOutput.textContent = finalScript;
+            outputContainer.classList.remove('hidden');
+            
+            // Reset copy button text
+            copyBtn.textContent = 'Copy to Clipboard';
+        });
+
+        // Event listener for the copy button
+        copyBtn.addEventListener('click', () => {
+            const textToCopy = scriptOutput.textContent;
+            
+            // A temporary textarea is used to hold the text for the copy command.
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = textToCopy;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            document.execCommand('copy'); // execCommand is used for broad compatibility
+            document.body.removeChild(tempTextArea);
+
+            // Provide user feedback
+            copyBtn.textContent = 'Copied! 👍';
+        });
+
+    </script>
+</body>
+</html>
