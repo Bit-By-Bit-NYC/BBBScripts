@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tenant Compliance Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      color: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #ccc;
+      text-align: left;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    .status {
+      font-size: 1.2em;
+    }
+    .status.active {
+      color: green;
+    }
+    .status.inactive {
+      color: red;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #0078D4;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      margin-bottom: 20px;
+    }
+    button:disabled {
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tenant Compliance Dashboard</h1>
+  <button onclick="recheckCompliance()">🔄 Recheck Compliance</button>
+  <table>
+    <thead>
+      <tr>
+        <th>Tenant Name</th>
+        <th>Tenant ID</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="tenantTable"></tbody>
+  </table>
+
+  <script>
+    async function loadTenants() {
+      const res = await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants');
+      const tenants = await res.json();
+      const tbody = document.getElementById('tenantTable');
+      tbody.innerHTML = '';
+      tenants.forEach(t => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${t.TenantName}</td>
+          <td>${t.TenantId}</td>
+          <td class="status ${t.IsActive ? 'active' : 'inactive'}">${t.IsActive ? '✅' : '❌'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function recheckCompliance() {
+      const button = document.querySelector('button');
+      button.disabled = true;
+      button.textContent = '🔄 Checking...';
+      await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/CheckTenantCompliance', { method: 'POST' });
+      await loadTenants();
+      button.disabled = false;
+      button.textContent = '🔄 Recheck Compliance';
+    }
+
+    loadTenants();
+  </script>
+</body>
+</html>
