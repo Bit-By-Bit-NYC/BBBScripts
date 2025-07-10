@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bit By Bit Helpdesk</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f5f7fa;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background-color: #003366;
+      color: white;
+      padding: 1em;
+      text-align: center;
+    }
+
+    main {
+      max-width: 800px;
+      margin: 2em auto;
+      background: white;
+      padding: 2em;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5em;
+      font-weight: bold;
+    }
+
+    textarea {
+      width: 100%;
+      height: 150px;
+      padding: 1em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin-bottom: 1em;
+      font-size: 1em;
+    }
+
+    button {
+      background-color: #005eb8;
+      color: white;
+      border: none;
+      padding: 0.75em 1.5em;
+      font-size: 1em;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #004a94;
+    }
+
+    .response {
+      margin-top: 2em;
+      padding: 1em;
+      background: #eef;
+      border-left: 5px solid #005eb8;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Bit By Bit Helpdesk</h1>
+  </header>
+  <main>
+    <form id="ticketForm">
+      <label for="problem">Describe the problem:</label>
+      <textarea id="problem" name="problem" required></textarea>
+      <button type="submit">Submit</button>
+    </form>
+
+    <div id="response" class="response" style="display:none;"></div>
+  </main>
+
+  <script>
+    document.getElementById('ticketForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const problem = document.getElementById('problem').value;
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://triage-bot-func.azurewebsites.net/api/triage?code=c6pDCuLBfHmbltEdTlWviJ_eVRZFeUqDo3Dg9aJAg2GWAzFuDjUJpw==', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+
+      xhr.onload = function() {
+        const responseDiv = document.getElementById('response');
+        if (xhr.status === 200) {
+          const data = JSON.parse(xhr.responseText);
+          responseDiv.style.display = 'block';
+          responseDiv.innerText =
+            `Problem: ${data.problem_summary}\n\n` +
+            `Resolution: ${data.resolution}\n\n` +
+            `Skills: ${data.skills_matched?.join(", ")}\n\n` +
+            `Engineers:\n${(data.recommended_engineers || []).map(e => `- ${e.name}: ${e.explanation}`).join('\n')}`;
+        } else {
+          responseDiv.style.display = 'block';
+          responseDiv.innerText = `Error ${xhr.status}: ${xhr.statusText}`;
+        }
+      };
+
+      xhr.onerror = function() {
+        const responseDiv = document.getElementById('response');
+        responseDiv.style.display = 'block';
+        responseDiv.innerText = 'Failed to fetch response from the server.';
+      };
+
+      xhr.send(JSON.stringify({ problem_summary: problem }));
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tenant Compliance Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 1em;
+    }
+    h1 {
+      font-size: 1.4em;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1em;
+      margin-bottom: 1em;
+      align-items: center;
+    }
+    select, button {
+      padding: 0.3em;
+      font-size: 0.9em;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.5em;
+    }
+    .card {
+      background: white;
+      padding: 0.6em;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      font-size: 0.85em;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2em;
+    }
+    .status {
+      font-size: 1.1em;
+    }
+    .compliant { color: green; }
+    .noncompliant { color: red; }
+    .backup-ok { color: #0078D4; }
+    .footer {
+      margin-top: 1em;
+      font-size: 0.75em;
+      color: #666;
+    }
+    details {
+      margin-bottom: 1em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tenant Compliance Dashboard</h1>
+
+  <details>
+    <summary>🧾 Microsoft Licensing & Patch Consent Instructions</summary>
+    <p>Please open this link in an incognito window and log in as a Global Admin for the tenant:</p>
+    <p><a href="https://login.microsoftonline.com/common/adminconsent?client_id=7f6d81f7-cbca-400b-95a8-350f8d4a34a1" target="_blank">Grant Admin Consent for MS Licensing App</a></p>
+  </details>
+
+  <details>
+    <summary>💾 Backup Consent Instructions</summary>
+    <p>Please open this link in an incognito window and log in as a Global Admin for the tenant:</p>
+    <p><a href="https://login.microsoftonline.com/common/adminconsent?client_id=a564e03e-5a3f-42d3-8836-a021f2ef7e0c" target="_blank">Grant Admin Consent for Backup App</a></p>
+  </details>
+
+  <div class="controls">
+    <button onclick="recheckCompliance()">🔄 Recheck Compliance</button>
+    <label>Licensing Filter:
+      <select id="complianceFilter" onchange="applyFilters()">
+        <option value="all">Show All</option>
+        <option value="onlyCompliant">Only Compliant</option>
+        <option value="onlyNonCompliant">Only Non-Compliant</option>
+      </select>
+    </label>
+    <label>Backup Filter:
+      <select id="backupFilter" onchange="applyFilters()">
+        <option value="all">Show All</option>
+        <option value="onlyBackup">Only With Backup</option>
+        <option value="onlyNoBackup">Only Without Backup</option>
+      </select>
+    </label>
+    <label>Columns:
+      <select id="columnCount" onchange="adjustColumns()">
+        <option value="2">2</option>
+        <option value="4" selected>4</option>
+        <option value="6">6</option>
+        <option value="8">8</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="tenantGrid" class="grid"></div>
+
+  <div class="footer">Last updated: 2025-07-09 | Revision 1.2</div>
+
+  <script>
+    let allTenants = [];
+
+    async function loadTenants() {
+      const res = await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants');
+      allTenants = await res.json();
+      allTenants.sort((a, b) => a.TenantName.localeCompare(b.TenantName));
+      applyFilters();
+    }
+
+    async function recheckCompliance() {
+      const btn = document.querySelector('button');
+      btn.disabled = true;
+      btn.textContent = '🔄 Checking...';
+      await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/CheckTenantCompliance', { method: 'POST' });
+      await loadTenants();
+      btn.disabled = false;
+      btn.textContent = '🔄 Recheck Compliance';
+    }
+
+    function applyFilters() {
+      const compliance = document.getElementById('complianceFilter').value;
+      const backup = document.getElementById('backupFilter').value;
+      const grid = document.getElementById('tenantGrid');
+      let tenants = allTenants.filter(t => {
+        let ok = true;
+        if (compliance === 'onlyCompliant') ok = t.IsActive === true;
+        else if (compliance === 'onlyNonCompliant') ok = t.IsActive === false;
+        if (backup === 'onlyBackup') ok = ok && t.IsBackup === true;
+        else if (backup === 'onlyNoBackup') ok = ok && !t.IsBackup;
+        return ok;
+      });
+
+      grid.innerHTML = tenants.map(t => `
+        <div class="card">
+          <strong>${t.TenantName}</strong>
+          <div class="status ${t.IsActive ? 'compliant' : 'noncompliant'}">
+            MS Licensing: ${t.IsActive ? '✅' : '❌'}
+          </div>
+          <div class="status ${t.IsBackup ? 'backup-ok' : 'noncompliant'}">
+            Backup: ${t.IsBackup ? '💾' : '❌'}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function adjustColumns() {
+      const count = document.getElementById('columnCount').value;
+      document.getElementById('tenantGrid').style.gridTemplateColumns = `repeat(${count}, 1fr)`;
+    }
+
+    loadTenants();
+  </script>
+</body>
+</html>

@@ -120,9 +120,6 @@
 # =================================================================================
 # Step 0: PRE-REQUISITES & CONFIGURATION
 # =================================================================================
-# Make sure you have the required modules. Run this if you haven't before.
-# Install-Module -Name Az -AllowClobber
-# Install-Module -Name GuestConfiguration
 
 # --- Configuration from Generator ---
 $subscriptionId    = "${subscriptionId}"
@@ -132,6 +129,36 @@ $storageAccountName = "guestconfig" + (Get-Random -Maximum 100000) # Must be glo
 $policyName        = "${policyName}"
 $policyAssignmentName = "${policyAssignmentName}"
 
+# --- Module Checks ---
+# We need PSDscResources for packaging, and PSDesiredStateConfiguration for compilation.
+$requiredModules = @("Az.Accounts", "Az.Storage", "Az.Resources", "GuestConfiguration", "PSDesiredStateConfiguration", "PSDscResources")
+Write-Host "Checking for required PowerShell modules..." -ForegroundColor Yellow
+foreach ($mod in $requiredModules) {
+    if (Get-Module -ListAvailable -Name $mod) {
+        Write-Host "  [V] Module '$mod' is available." -ForegroundColor Green
+    } else {
+        Write-Host "  [X] Module '$mod' not found. Attempting to install..." -ForegroundColor Red
+        try {
+            Install-Module -Name $mod -Repository PSGallery -Force -AllowClobber -Scope CurrentUser
+        } catch {
+            Write-Error "Failed to install module '$mod'. Please install it manually and re-run the script."
+            return
+        }
+    }
+}
+
+# Explicitly import modules into the session to prevent parser errors.
+Write-Host "Importing necessary modules into the current session..." -ForegroundColor Yellow
+try {
+    Import-Module -Name GuestConfiguration -Force
+    Import-Module -Name PSDscResources -Force
+    Import-Module -Name PSDesiredStateConfiguration -Force
+    Write-Host "  Modules imported successfully." -ForegroundColor Green
+} catch {
+    Write-Error "Failed to import a required module. Please ensure modules are installed correctly and try again. Error: $_"
+    return
+}
+
 # --- Connect to Azure ---
 Write-Host "Connecting to Azure..." -ForegroundColor Yellow
 Connect-AzAccount
@@ -139,14 +166,14 @@ Set-AzContext -SubscriptionId $subscriptionId
 
 # =================================================================================
 # Step 1: CREATE THE DSC CONFIGURATION
-# This defines the state we want to audit. We're checking if a file exists.
+# This defines the state we want to audit. We're checking if a directory exists.
 # =================================================================================
-Write-Host "Creating DSC Configuration script..." -ForegroundColor Green
+Write-Host "Creating DSC Configuration script..." -ForegroundColor Cyan
 
-# The DSC configuration script. It uses the 'File' resource to check for the agent's executable.
 $dscConfigurationScript = @"
 Configuration AuditArcticWolfAgent {
-    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+    # **FIX:** Import from PSDscResources for packaging compatibility.
+    Import-DscResource -ModuleName 'PSDscResources'
 
     Node 'localhost' {
         File AuditArcticWolfDirectory {
@@ -157,78 +184,110 @@ Configuration AuditArcticWolfAgent {
     }
 }
 "@
-# Save the script to a file
 $configPath = ".\\AuditArcticWolfAgent.ps1"
 $dscConfigurationScript | Out-File -FilePath $configPath
 
-# Execute the script to make the configuration available in the session
-. $configPath
+# Execute the script to make the configuration function available in the session
+try {
+    . $configPath
+} catch {
+    Write-Error "Failed to parse the DSC configuration script. This may be due to a missing module. Error: $_"
+    return
+}
 
 # =================================================================================
 # Step 2: COMPILE DSC & CREATE GUEST CONFIGURATION PACKAGE
 # This turns our script into a .mof file and then packages it into a .zip
 # =================================================================================
-Write-Host "Compiling DSC to MOF file..." -ForegroundColor Green
-AuditArcticWolfAgent # This creates the localhost.mof file
+try {
+    Write-Host "Compiling DSC to MOF file..." -ForegroundColor Cyan
+    AuditArcticWolfAgent # This creates the localhost.mof in a sub-directory
 
-Write-Host "Creating Guest Configuration package (.zip)..." -ForegroundColor Green
-New-GuestConfigurationPackage \`
-    -Configuration ".\\localhost.mof" \`
-    -Name $policyName \`
-    -Path ".\\" \`
-    -Force
+    # Point to the correct path for the compiled MOF file
+    $mofPath = ".\\AuditArcticWolfAgent\\localhost.mof"
+    if (-not (Test-Path $mofPath)) {
+        Write-Error "DSC compilation failed. MOF file not found at '$mofPath'."
+        return
+    }
+    Write-Host "Successfully found compiled MOF at '$mofPath'" -ForegroundColor Green
+
+    Write-Host "Creating Guest Configuration package (.zip)..." -ForegroundColor Cyan
+    New-GuestConfigurationPackage \`
+        -Configuration $mofPath \`
+        -Name $policyName \`
+        -Path ".\\" \`
+        -Force
+} catch {
+    Write-Error "Failed during DSC compilation or packaging. Error: $_"
+    return
+}
 
 # =================================================================================
 # Step 3: UPLOAD THE PACKAGE TO AZURE STORAGE
 # The policy needs a URL to find our custom configuration package.
 # =================================================================================
-Write-Host "Setting up Azure Storage Account..." -ForegroundColor Green
-New-AzResourceGroup -Name $resourceGroupName -Location $location -Force
-$storageAccount = New-AzStorageAccount \`
-    -ResourceGroupName $resourceGroupName \`
-    -Name $storageAccountName \`
-    -Location $location \`
-    -SkuName Standard_LRS
+try {
+    Write-Host "Setting up Azure Storage Account..." -ForegroundColor Cyan
+    New-AzResourceGroup -Name $resourceGroupName -Location $location -Force
+    $storageAccount = New-AzStorageAccount \`
+        -ResourceGroupName $resourceGroupName \`
+        -Name $storageAccountName \`
+        -Location $location \`
+        -SkuName Standard_LRS
 
-$context = $storageAccount.Context
-$containerName = "guestconfiguration"
-New-AzStorageContainer -Name $containerName -Context $context -Permission Off
+    $context = $storageAccount.Context
+    $containerName = "guestconfiguration"
+    New-AzStorageContainer -Name $containerName -Context $context -Permission Off
 
-Write-Host "Uploading package to Blob Storage..." -ForegroundColor Green
-$packageZipPath = ".\\$($policyName).zip"
-Set-AzStorageBlobContent -File $packageZipPath -Container $containerName -Context $context -Force
+    Write-Host "Uploading package to Blob Storage..." -ForegroundColor Cyan
+    $packageZipPath = ".\\$($policyName).zip"
+    Set-AzStorageBlobContent -File $packageZipPath -Container $containerName -Context $context -Force
 
-$packageUri = (Get-AzStorageBlob -Container $containerName -Blob "$($policyName).zip" -Context $context).ICloudBlob.Uri.AbsoluteUri
+    $packageUri = (Get-AzStorageBlob -Container $containerName -Blob "$($policyName).zip" -Context $context).ICloudBlob.Uri.AbsoluteUri
+} catch {
+    Write-Error "Failed during Azure Storage operations. Error: $_"
+    return
+}
 
 # =================================================================================
 # Step 4: CREATE AND ASSIGN THE AZURE POLICY
 # This uses the 'GuestConfiguration' module to create the policy definition
 # and then assigns it to a resource group.
 # =================================================================================
-Write-Host "Creating Azure Policy Definition..." -ForegroundColor Green
-$policyDefinitionParameters = @{
-    Name          = $policyName
-    Policy        = $packageZipPath # The module reads the zip to get details
-    Path          = ".\\"
-    Platform      = "Windows"
-    Mode          = "Audit" # Use 'Audit' to report, 'AuditAndSet' to enforce
-    DisplayName   = "Audit: Arctic Wolf Agent should be installed"
-    Description   = "Audits that the Arctic Wolf Agent installation directory exists on Windows VMs."
+try {
+    Write-Host "Creating Azure Policy Definition..." -ForegroundColor Cyan
+    $policyDefinitionParameters = @{
+        Name          = $policyName
+        Policy        = $packageZipPath # The module reads the zip to get details
+        Path          = ".\\"
+        Platform      = "Windows"
+        Mode          = "Audit" # Use 'Audit' to report, 'AuditAndSet' to enforce
+        DisplayName   = "Audit: Arctic Wolf Agent should be installed"
+        Description   = "Audits that the Arctic Wolf Agent installation directory exists on Windows VMs."
+    }
+    New-GuestConfigurationPolicy @policyDefinitionParameters
+
+    Write-Host "Publishing Policy Definition to Azure..." -ForegroundColor Cyan
+    # Point to the correct path for the generated policy JSON
+    $policyJsonPath = ".\\$($policyName)\\AuditIfNotExists.json"
+    if (-not (Test-Path $policyJsonPath)) {
+        Write-Error "Policy JSON file was not created at '$policyJsonPath'. Aborting."
+        return
+    }
+    $policyDefinition = New-AzPolicyDefinition -Name $policyName -Policy (Get-Content $policyJsonPath -Raw)
+
+    Write-Host "Assigning policy to Resource Group '$($resourceGroupName)'..." -ForegroundColor Cyan
+    $scope = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName"
+    New-AzPolicyAssignment \`
+        -Name $policyAssignmentName \`
+        -Scope $scope \`
+        -PolicyDefinition $policyDefinition
+} catch {
+    Write-Error "Failed during Azure Policy creation or assignment. Error: $_"
+    return
 }
-New-GuestConfigurationPolicy @policyDefinitionParameters
 
-Write-Host "Publishing Policy Definition to Azure..." -ForegroundColor Green
-$policyJsonPath = ".\\$($policyName)\\AuditIfNotExists.json"
-$policyDefinition = New-AzPolicyDefinition -Name $policyName -Policy (Get-Content $policyJsonPath -Raw)
-
-Write-Host "Assigning policy to Resource Group '$($resourceGroupName)'..." -ForegroundColor Green
-$scope = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName"
-New-AzPolicyAssignment \`
-    -Name $policyAssignmentName \`
-    -Scope $scope \`
-    -PolicyDefinition $policyDefinition
-
-Write-Host "✅ Done! Policy has been created and assigned." -ForegroundColor Cyan
+Write-Host "✅ Done! Policy has been created and assigned." -ForegroundColor Green
 Write-Host "It may take 15-30 minutes for the compliance status to appear in the Azure Portal."
 `;
             // Display the generated script
