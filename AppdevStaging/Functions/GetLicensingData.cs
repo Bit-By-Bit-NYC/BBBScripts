@@ -42,7 +42,7 @@ namespace AppdevStaging.Functions
                 var graphClient = new GraphServiceClient(credential);
 
                 // 🔍 Build dynamic SKU map
-                log.LogInformation("📦 Fetching SubscribedSkus for SKU mapping...");
+                log.LogInformation("📦 Fetching SubscribedSkus for tenant {tenantId}...", tenantId);
                 var skuResponse = await graphClient.SubscribedSkus.GetAsync();
                 var dynamicSkuMap = new Dictionary<string, string>();
 
@@ -77,7 +77,7 @@ namespace AppdevStaging.Functions
                     page = await graphClient.Users.WithUrl(page.OdataNextLink).GetAsync();
                 }
 
-                log.LogInformation($"📊 Total users retrieved: {allUsers.Count}");
+                log.LogInformation($"📊 Total users retrieved for tenant {tenantId}: {allUsers.Count}");
 
                 var results = allUsers.Select(user => new
                 {
@@ -105,9 +105,17 @@ namespace AppdevStaging.Functions
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "❌ Error retrieving licensing data.");
+                log.LogError(ex, "❌ Error retrieving licensing data for tenant {tenantId}", tenantId);
+
                 var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
-                await errorResponse.WriteStringAsync("Internal server error.");
+                await errorResponse.WriteAsJsonAsync(new
+                {
+                    error = "Failed to retrieve licensing data.",
+                    tenantId,
+                    exception = ex.Message,
+                    innerException = ex.InnerException?.Message,
+                    stackTrace = ex.StackTrace
+                });
                 return errorResponse;
             }
         }
