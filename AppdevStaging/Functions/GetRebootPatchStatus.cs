@@ -1,7 +1,9 @@
-// Azure Function: GetRebootPatchStatus.cs (Isolated Worker Model)
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Azure.Identity;
 using Azure.Monitor.Query;
@@ -9,7 +11,10 @@ using Azure.Monitor.Query.Models;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.OperationalInsights;
+using Azure.ResourceManager.OperationalInsights.Models;
 
 namespace Functions
 {
@@ -24,51 +29,42 @@ namespace Functions
 
         [Function("GetRebootPatchStatus")]
         public async Task<HttpResponseData> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequestData req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequestData req,
             FunctionContext executionContext)
         {
             _logger.LogInformation("🟢 Function triggered at {time}", DateTime.UtcNow);
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-            string subscriptionId = query["subscriptionId"];
-            string workspaceId = query["workspaceId"];
-
-            _logger.LogInformation("📥 Query params - SubscriptionId: {sub}, WorkspaceId: {ws}", subscriptionId, workspaceId);
-
-            if (string.IsNullOrWhiteSpace(subscriptionId) || string.IsNullOrWhiteSpace(workspaceId))
+            string tenantId = query["tenantId"];
+            if (string.IsNullOrWhiteSpace(tenantId))
             {
-                _logger.LogWarning("⚠️ Missing query parameters.");
+                _logger.LogWarning("⚠️ Missing tenantId.");
                 var badResponse = req.CreateResponse(HttpStatusCode.BadRequest);
-                await badResponse.WriteStringAsync("Missing 'subscriptionId' or 'workspaceId' query parameters.");
+                await badResponse.WriteStringAsync("Missing 'tenantId' query parameter.");
                 return badResponse;
             }
 
             var clientId = Environment.GetEnvironmentVariable("AZ_STAT_CLIENT_ID");
             var clientSecret = Environment.GetEnvironmentVariable("AZ_STAT_SECRET");
-            var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
-
-            _logger.LogDebug("🔐 Using TenantId: {tenant}, ClientId: {client}", tenantId, clientId);
 
             ClientSecretCredential credential;
             try
             {
                 credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-                _logger.LogInformation("✅ ClientSecretCredential created.");
+                _logger.LogInformation("✅ Credential created for tenant {tenantId}", tenantId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Failed to create ClientSecretCredential.");
+                _logger.LogError(ex, "❌ Failed to create credential.");
                 var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
                 await errorResponse.WriteStringAsync("Error creating credentials.");
                 return errorResponse;
             }
 
-
-// 2025-06-04-JJS/GP - failing we think on following code; Check Application Insights runninb before hitting
             var logsClient = new LogsQueryClient(credential);
             var resultList = new List<object>();
 
-            var kqlQuery = @"
+            string kqlQuery = @"
 let rebootData = 
     Event
     | where EventLog == ""System""
@@ -81,7 +77,8 @@ let patchData =
     | where EventLog == ""System""
     | where EventID == 19
     | where not(RenderedDescription has ""Defender"" or RenderedDescription has ""Security Intelligence Update"" or RenderedDescription has "".NET Framework"")
-    | where RenderedDescription has ""Installation Successful: Windows successfully installed the following update"" and (RenderedDescription has ""Cumulative"" or RenderedDescription has ""Security"")
+    | where RenderedDescription has ""Installation Successful: Windows successfully installed the following update"" 
+        and (RenderedDescription has ""Cumulative"" or RenderedDescription has ""Security"")
     | extend ComputerName = tolower(Computer)
     | summarize arg_max(TimeGenerated, RenderedDescription, Computer) by ComputerName
     | project ComputerName, LastPatchTime = TimeGenerated, PatchDetails = RenderedDescription, PatchComputer = Computer;
@@ -97,24 +94,50 @@ rebootData
 
             try
             {
-                _logger.LogInformation("📤 Submitting KQL query...");
-                var response = await logsClient.QueryWorkspaceAsync(
-                    workspaceId,
-                    kqlQuery,
-                    new QueryTimeRange(TimeSpan.FromDays(30)));
+                var armClient = new ArmClient(credential, default, new ArmClientOptions());
+                _logger.LogInformation("🌐 Initialized ARM client.");
 
-                _logger.LogInformation("📥 Query result received. Rows: {count}", response.Value.Table.Rows.Count);
-
-                var table = response.Value.Table;
-                foreach (var row in table.Rows)
+                var subs = armClient.GetSubscriptions();
+                await foreach (var sub in subs)
                 {
-                    resultList.Add(new
+                    _logger.LogInformation("📦 Checking subscription: {sub}", sub.Data.SubscriptionId);
+
+                    var resourceGroups = sub.GetResourceGroups();
+                    await foreach (var rg in resourceGroups)
                     {
-                        Computer = row["Computer"]?.ToString(),
-                        LastReboot = FormatDate(row["LastReboot"]),
-                        LastPatchTime = FormatDate(row["LastPatchTime"]),
-                        PatchDetails = row["PatchDetails"]?.ToString()
-                    });
+                        var workspaces = rg.GetOperationalInsightsWorkspaces();
+                        await foreach (var ws in workspaces)
+                        {
+                            _logger.LogInformation("📊 Querying workspace: {ws}", ws.Data.Name);
+
+                            try
+                            {
+                                var response = await logsClient.QueryWorkspaceAsync(
+                                    ws.Data.CustomerId.ToString(),
+                                    kqlQuery,
+                                    new QueryTimeRange(TimeSpan.FromDays(30)));
+
+                                _logger.LogInformation("✅ Got {count} rows from workspace {ws}", response.Value.Table.Rows.Count, ws.Data.Name);
+
+                                foreach (var row in response.Value.Table.Rows)
+                                {
+                                    resultList.Add(new
+                                    {
+                                        Computer = row["Computer"]?.ToString(),
+                                        LastReboot = FormatDate(row["LastReboot"]),
+                                        LastPatchTime = FormatDate(row["LastPatchTime"]),
+                                        PatchDetails = row["PatchDetails"]?.ToString(),
+                                        Workspace = ws.Data.Name,
+                                        Subscription = sub.Data.DisplayName
+                                    });
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "⚠️ Query failed for workspace {ws}", ws.Data.Name);
+                            }
+                        }
+                    }
                 }
 
                 var okResponse = req.CreateResponse(HttpStatusCode.OK);
@@ -123,9 +146,9 @@ rebootData
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Log Analytics query failed.");
+                _logger.LogError(ex, "❌ Outer failure during query orchestration.");
                 var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
-                await errorResponse.WriteStringAsync($"Error querying Log Analytics workspace: {ex.Message}");
+                await errorResponse.WriteStringAsync($"Outer failure: {ex.Message}");
                 return errorResponse;
             }
         }

@@ -1,3 +1,4 @@
+<!-- MicrosoftLicensing.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +6,7 @@
   <title>Microsoft Licensing Viewer</title>
   <style>
     body { font-family: sans-serif; padding: 1em; }
-    select, button { margin: 0.5em 0; padding: 0.3em; }
+    select, button, input { margin: 0.5em 0; padding: 0.3em; }
     pre { background: #111; color: #0f0; padding: 0.5em; overflow: auto; display: none; }
     table { border-collapse: collapse; margin-top: 1em; width: 100%; }
     th, td { border: 1px solid #ccc; padding: 0.4em; text-align: left; }
@@ -21,25 +22,36 @@
 
   <select id="tenantDropdown"></select><br/>
   <label><input type="checkbox" id="excludeEmpty" checked> Exclude users without any licenses</label><br/>
-  <label>Rows per page: 
-    <select id="rowsPerPageSelect">
+  <label>Sign-In Filter:
+    <select id="inactiveFilter" onchange="applySignInFilter()">
+      <option value="">-- All Users --</option>
+      <option value="30">Not logged in in 30+ days</option>
+      <option value="60">Not logged in in 60+ days</option>
+      <option value="90">Not logged in in 90+ days</option>
+      <option value="180">Not logged in in 180+ days</option>
+      <option value="365">Not logged in in 365+ days</option>
+    </select>
+  </label><br/>
+
+  <label>Rows per page:
+    <select id="pageSize" onchange="updateTable()">
       <option>10</option>
-      <option>25</option>
+      <option>20</option>
       <option selected>50</option>
       <option>100</option>
     </select>
   </label><br/>
 
-  <button onclick="fetchLicensing()">Fetch Licensing Data</button>
+  <button onclick="fetchLicensing()">Fetch Licensing Data</button><br/>
   <a id="downloadBtn" href="#" download="LicensingData.json" style="display:none">⬇ Export JSON</a>
-  <button onclick="exportFilteredCSV()" style="display:none" id="csvExportBtn">⬇ Export Filtered CSV</button>
+  <button onclick="exportCSV()">⬇ Export as CSV for Selected</button>
 
   <p><a href="#" onclick="toggleJSON(); return false;">▼ Show Raw JSON</a></p>
-  <pre id="rawJson"></pre>
+  <pre id="rawJson" style="display:none"></pre>
   <div id="grid"></div>
   <div class="pagination" id="pagination"></div>
 
-  <footer><small>Last updated: 2025-07-09 | Revision 1.8</small></footer>
+  <footer><small>Last updated: 2025-07-08 UTC | Revision 1.9</small></footer>
 
   <script>
     const licenseLookup = {
@@ -60,85 +72,78 @@
     let fullData = [];
     let filteredData = [];
     let currentPage = 1;
-    let rowsPerPage = 50;
-    let sortDirection = {};
 
     function toggleJSON() {
       const raw = document.getElementById("rawJson");
       raw.style.display = raw.style.display === "block" ? "none" : "block";
     }
 
-    function filterValidLicenses(user) {
-      const licenses = user.Licenses || [];
-      return licenses.some(sku => sku && sku !== "None" && sku !== "-");
-    }
-
     async function fetchLicensing() {
       const tenantId = document.getElementById("tenantDropdown").value;
-      const excludeEmpty = document.getElementById("excludeEmpty").checked;
       const output = document.getElementById("rawJson");
-      const grid = document.getElementById("grid");
       const download = document.getElementById("downloadBtn");
-      const csvBtn = document.getElementById("csvExportBtn");
 
       output.textContent = "Fetching...";
       output.style.display = "none";
-      grid.innerHTML = "";
 
       try {
         const res = await fetch(`https://func-bbb-tenantapi.azurewebsites.net/api/GetLicensingData?tenantId=${tenantId}`);
         const data = await res.json();
-        fullData = data;
-        output.textContent = JSON.stringify(data, null, 2);
+        fullData = data.map(u => {
+          const date = u.LastSignInDate ? new Date(u.LastSignInDate) : null;
+          const days = date ? Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24)) : "";
+          return { ...u, LastSignInOnly: date ? date.toISOString().slice(0, 10) : "", DaysSinceSignIn: days };
+        });
+        output.textContent = JSON.stringify(fullData, null, 2);
         download.style.display = "inline";
-        download.href = "data:text/json;charset=utf-8," + encodeURIComponent(output.textContent);
-        csvBtn.style.display = "inline";
-        renderTable(excludeEmpty);
+        download.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullData, null, 2));
+        renderTable();
       } catch (err) {
-        output.textContent = "Error fetching data: " + err;
+        output.textContent = "Error: " + err;
         output.style.display = "block";
       }
     }
 
-    function renderTable(excludeEmpty) {
-      const exclude = excludeEmpty || document.getElementById("excludeEmpty").checked;
-      filteredData = exclude ? fullData.filter(filterValidLicenses) : [...fullData];
+    function renderTable() {
+      const excludeEmpty = document.getElementById("excludeEmpty").checked;
+      filteredData = fullData.filter(u => !excludeEmpty || (u.Licenses && u.Licenses.length > 0 && u.Licenses[0] !== "None"));
+      applySignInFilter();
+    }
+
+    function applySignInFilter() {
+      const days = parseInt(document.getElementById("inactiveFilter").value || "0", 10);
+      if (days > 0) {
+        filteredData = filteredData.filter(u => u.DaysSinceSignIn && u.DaysSinceSignIn >= days);
+      }
       currentPage = 1;
       updateTable();
     }
 
     function updateTable() {
-      const tableContainer = document.getElementById("grid");
-      rowsPerPage = parseInt(document.getElementById("rowsPerPageSelect").value) || 50;
-      const start = (currentPage - 1) * rowsPerPage;
-      const end = start + rowsPerPage;
-      const paged = filteredData.slice(start, end);
+      const pageSize = parseInt(document.getElementById("pageSize").value || "50");
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+      const pageData = filteredData.slice(start, end);
 
-      let table = `<table><thead><tr>`;
-      const headers = ["Display Name", "User Principal Name", "Licenses", "Last Sign-In"];
-      const keyMap = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInDate"];
+      const headers = ["Display Name", "User Principal Name", "Licenses", "Last Sign-In", "Days Since Sign-In"];
+      const keys = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInOnly", "DaysSinceSignIn"];
 
+      let html = "<table><thead><tr>";
       headers.forEach((h, i) => {
-        table += `<th class="sortable" onclick="sortBy(${i})">${h}
-                  <br/><input class="column-filter" oninput="filterColumn(${i}, this.value)" /></th>`;
+        html += `<th class="sortable" onclick="sortBy(${i})">${h}<br/><input class='column-filter' oninput='filterColumn(${i}, this.value)' onclick='event.stopPropagation();' /></th>`;
       });
-      table += `</tr></thead><tbody>`;
+      html += "</tr></thead><tbody>";
 
-      paged.forEach(u => {
-        const licenses = (u.Licenses || []).map(sku => licenseLookup[sku] || `Unmapped SKU: ${sku}`).join(", ") || "-";
-        table += `<tr>
-          <td>${u.DisplayName || ""}</td>
-          <td>${u.UserPrincipalName || ""}</td>
-          <td>${licenses}</td>
-          <td>${u.LastSignInDate || ""}</td>
-        </tr>`;
+      pageData.forEach(u => {
+        const licenses = (u.Licenses || []).map(s => licenseLookup[s] || s).join(", ") || "-";
+        html += `<tr><td>${u.DisplayName || ""}</td><td>${u.UserPrincipalName || ""}</td><td>${licenses}</td><td>${u.LastSignInOnly || ""}</td><td>${u.DaysSinceSignIn || ""}</td></tr>`;
       });
 
-      table += "</tbody></table>";
-      tableContainer.innerHTML = table;
+      html += "</tbody></table>";
+      document.getElementById("grid").innerHTML = html;
 
       const pagination = document.getElementById("pagination");
-      const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+      const totalPages = Math.ceil(filteredData.length / pageSize);
       pagination.innerHTML = "";
       for (let i = 1; i <= totalPages; i++) {
         const btn = document.createElement("button");
@@ -150,69 +155,46 @@
     }
 
     function sortBy(index) {
-      const keyMap = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInDate"];
-      const key = keyMap[index];
-      const direction = sortDirection[key] = !(sortDirection[key]);
-
-      filteredData.sort((a, b) => {
-        const valA = key === "Licenses" ? (a.Licenses || []).join(", ") : a[key] || "";
-        const valB = key === "Licenses" ? (b.Licenses || []).join(", ") : b[key] || "";
-        return direction
-          ? valA.localeCompare(valB)
-          : valB.localeCompare(valA);
-      });
-
+      const keys = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInOnly", "DaysSinceSignIn"];
+      const key = keys[index];
+      filteredData.sort((a, b) => (a[key] || "").toString().localeCompare((b[key] || "").toString()));
       currentPage = 1;
       updateTable();
     }
 
     function filterColumn(index, value) {
-      const keyMap = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInDate"];
-      const key = keyMap[index];
+      const keys = ["DisplayName", "UserPrincipalName", "Licenses", "LastSignInOnly", "DaysSinceSignIn"];
+      const key = keys[index];
       filteredData = fullData.filter(u => {
-        const val = key === "Licenses"
-          ? (u.Licenses || []).map(s => licenseLookup[s] || `Unmapped SKU: ${s}`).join(", ")
-          : u[key] || "";
+        const val = key === "Licenses" ? (u.Licenses || []).map(s => licenseLookup[s] || s).join(", ") : (u[key] || "").toString();
         return val.toLowerCase().includes(value.toLowerCase());
       });
-
-      if (document.getElementById("excludeEmpty").checked)
-        filteredData = filteredData.filter(filterValidLicenses);
-
       currentPage = 1;
       updateTable();
     }
 
-    function exportFilteredCSV() {
-      const rows = [["Display Name", "User Principal Name", "Licenses", "Last Sign-In"]];
+    function exportCSV() {
+      const rows = [["Display Name", "User Principal Name", "Licenses", "Last Sign-In", "Days Since Sign-In"]];
       filteredData.forEach(u => {
-        const licenses = (u.Licenses || []).map(s => licenseLookup[s] || `Unmapped SKU: ${s}`).join(", ") || "-";
-        rows.push([u.DisplayName, u.UserPrincipalName, licenses, u.LastSignInDate || ""]);
+        const licenses = (u.Licenses || []).map(s => licenseLookup[s] || s).join(", ");
+        rows.push([u.DisplayName, u.UserPrincipalName, licenses, u.LastSignInOnly, u.DaysSinceSignIn]);
       });
-
-      const csv = rows.map(r => r.map(f => `"${(f || "").replace(/"/g, '""')}"`).join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "FilteredLicensing.csv";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const csv = rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "LicensingData.csv";
+      link.click();
     }
 
     async function populateTenants() {
-      const dropdown = document.getElementById("tenantDropdown");
-      const res = await fetch("https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants");
-      const tenants = await res.json();
-      const activeTenants = tenants.filter(t => t.IsActive);
-      activeTenants.sort((a, b) => a.TenantName.localeCompare(b.TenantName));
-      dropdown.innerHTML = activeTenants
-        .map(t => `<option value="${t.TenantId}">${t.TenantName} (${t.TenantId})</option>`)
-        .join("");
-    }
-
-    document.getElementById("rowsPerPageSelect").addEventListener("change", () => updateTable());
+  const dropdown = document.getElementById("tenantDropdown");
+  const res = await fetch("https://func-bbb-tenantapi.azurewebsites.net/api/GetTenants");
+  const tenants = (await res.json()).filter(t => t.IsActive); // Filter only active tenants
+  dropdown.innerHTML = tenants
+    .map(t => `<option value="${t.TenantId}">${t.TenantName} (${t.TenantId})</option>`)
+    .join("");
+}
     populateTenants();
   </script>
 </body>
