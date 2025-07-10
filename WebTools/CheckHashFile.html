@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>VirusTotal Hash Checker</title>
+  <style>
+    body { font-family: sans-serif; padding: 1em; }
+    input, button, label { margin: 0.5em 0; padding: 0.3em; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1em; }
+    th, td { border: 1px solid #ccc; padding: 0.5em; text-align: left; }
+    pre { background: #111; color: #0f0; padding: 1em; overflow: auto; display: none; }
+    .footer { margin-top: 2em; font-size: small; color: #666; }
+  </style>
+</head>
+<body>
+  <h2>VirusTotal Hash Checker</h2>
+  <p>This tool allows Bit by Bit team members to upload a hash list CSV file and identify known malicious files using VirusTotal.</p>
+
+  <input type="file" id="hashFile" accept=".csv" />
+  <button id="checkButton">Check Hashes</button>
+  <label><input type="checkbox" id="filterMalicious"> Show only malicious results</label>
+  <a id="downloadButton" style="display:none" class="button">⬇ Download Malicious</a>
+
+  <p><strong>Note:</strong> This tool is limited to 4 VirusTotal queries per minute due to API restrictions. Large files will take time.</p>
+
+  <div id="results"></div>
+  <pre id="rawOutput"></pre>
+
+  <div class="footer">
+    CheckHashFile.html | Revision 1.0 | Last updated: 2025-07-10 UTC<br/>
+    Change Log: Initial version with file upload, result filtering, and download support.
+  </div>
+
+  <script>
+    document.getElementById('checkButton').addEventListener('click', async () => {
+      const fileInput = document.getElementById('hashFile');
+      const showOnlyMalicious = document.getElementById('filterMalicious').checked;
+      const resultDiv = document.getElementById('results');
+      const downloadBtn = document.getElementById('downloadButton');
+      const preOutput = document.getElementById('rawOutput');
+
+      if (!fileInput.files.length) {
+        alert("Please select a CSV file.");
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+
+      reader.onload = async function (e) {
+        const csvContent = e.target.result;
+
+        try {
+          const response = await fetch('https://func-bbb-tenantapi.azurewebsites.net/api/CheckHashes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: csvContent
+          });
+
+          const data = await response.json();
+          preOutput.textContent = JSON.stringify(data, null, 2);
+          preOutput.style.display = 'block';
+
+          if (!Array.isArray(data)) {
+            resultDiv.innerHTML = '<div style="color:red">Error: Unexpected response format</div>';
+            return;
+          }
+
+          const filtered = showOnlyMalicious ? data.filter(d => d.malicious) : data;
+
+          if (filtered.length === 0) {
+            resultDiv.innerHTML = '<div style="color:green">No malicious files found.</div>';
+            downloadBtn.style.display = "none";
+            return;
+          }
+
+          const tableRows = filtered.map(entry => `
+            <tr>
+              <td>${entry.hash}</td>
+              <td>${entry.malicious ? "🚨 Yes" : "No"}</td>
+              <td>${entry.details || ""}</td>
+            </tr>
+          `).join("");
+
+          resultDiv.innerHTML = `
+            <table>
+              <thead><tr><th>Hash</th><th>Malicious</th><th>Details</th></tr></thead>
+              <tbody>${tableRows}</tbody>
+            </table>
+          `;
+
+          const malicious = data.filter(d => d.malicious);
+          if (malicious.length > 0) {
+            const blob = new Blob([malicious.map(d => d.hash).join('\n')], { type: "text/plain" });
+            downloadBtn.href = URL.createObjectURL(blob);
+            downloadBtn.download = "malicious_hashes.txt";
+            downloadBtn.style.display = "inline-block";
+          }
+
+        } catch (err) {
+          preOutput.textContent = `ERROR: ${err.message}`;
+          preOutput.style.display = 'block';
+        }
+      };
+
+      reader.readAsText(file);
+    });
+  </script>
+</body>
+</html>
