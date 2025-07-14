@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Team Booking Directory</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; max-width: 600px; margin: auto; }
+    h1 { color: #0078D4; }
+    ul { list-style-type: none; padding: 0; }
+    li { margin: 0.5rem 0; }
+    a { color: #004B8D; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>📅 Book with Our Team</h1>
+  <ul id="bookingsList"><li>Loading...</li></ul>
+
+  <script>
+    const API_URL = "https://bbb-bookings-func.azurewebsites.net/api/BookingsDirectory"; // Replace with your function URL
+
+    fetch(API_URL)
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch");
+        return res.json();
+      })
+      .then(data => {
+        const list = document.getElementById("bookingsList");
+        list.innerHTML = "";
+        if (data.length === 0) {
+          list.innerHTML = "<li>No booking pages found.</li>";
+          return;
+        }
+
+        data.forEach(entry => {
+          const li = document.createElement("li");
+          const link = document.createElement("a");
+          link.href = entry.url;
+          link.textContent = entry.name;
+          link.target = "_blank";
+          li.appendChild(link);
+          list.appendChild(li);
+        });
+      })
+      .catch(err => {
+        const list = document.getElementById("bookingsList");
+        list.innerHTML = `<li class="error">⚠ Error loading booking directory.</li>`;
+        console.error(err);
+      });
+  </script>
+</body>
+</html>
