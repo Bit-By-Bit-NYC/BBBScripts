@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FortiGate Config Generator</title>
+  <style>
+    body { font-family: monospace; padding: 20px; max-width: 800px; }
+    label, input, textarea, button { display: block; margin: 10px 0; width: 100%; }
+    textarea { height: 300px; }
+    pre { background: #f4f4f4; padding: 10px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h2>FortiGate Initial Config Generator</h2>
+
+  <label for="trustedHosts">Admin Trusted Hosts (comma separated):</label>
+  <input type="text" id="trustedHosts" value="74.119.228.0/22">
+
+  <label for="wan1">WAN1 Interface Name (optional):</label>
+  <input type="text" id="wan1" placeholder="e.g., wan1">
+
+  <label for="wan1ip">WAN1 IP/Mask (optional):</label>
+  <input type="text" id="wan1ip" placeholder="e.g., 192.0.2.1 255.255.255.0">
+
+  <label for="wan2">WAN2 Interface Name (optional):</label>
+  <input type="text" id="wan2" placeholder="e.g., wan2">
+
+  <label for="wan2ip">WAN2 IP/Mask (optional):</label>
+  <input type="text" id="wan2ip" placeholder="e.g., 192.0.2.2 255.255.255.0">
+
+  <button onclick="generateConfig()">Generate Config</button>
+
+  <h3>Generated FortiGate CLI Config:</h3>
+  <pre id="output"></pre>
+
+  <script>
+    function generateConfig() {
+      const trustedHosts = document.getElementById("trustedHosts").value.split(",").map(h => h.trim());
+      const wan1 = document.getElementById("wan1").value.trim();
+      const wan1ip = document.getElementById("wan1ip").value.trim();
+      const wan2 = document.getElementById("wan2").value.trim();
+      const wan2ip = document.getElementById("wan2ip").value.trim();
+
+      let config = "";
+
+      config += "config system global\n";
+      config += "    set fmg-status enable\n";
+      config += "    set fmg-source-ip 0.0.0.0\n";
+      config += "end\n\n";
+
+      config += "config system central-management\n";
+      config += "    set type fortimanager\n";
+      config += "    set fmg " + "fmg.bitxbit.com\n";
+      config += "end\n\n";
+
+      config += "config system admin\n";
+      config += "    edit admin\n";
+      trustedHosts.forEach((host, index) => {
+        config += `        set trusted-host${index + 1} ${host}\n`;
+      });
+      config += "    next\n";
+      config += "end\n\n";
+
+      if (wan1 && wan1ip) {
+        config += `config system interface\n`;
+        config += `    edit "${wan1}"\n`;
+        config += `        set ip ${wan1ip}\n`;
+        config += `        set allowaccess ping https ssh fgfm\n`;
+        config += `    next\n`;
+        config += `end\n\n`;
+      }
+
+      if (wan2 && wan2ip) {
+        config += `config system interface\n`;
+        config += `    edit "${wan2}"\n`;
+        config += `        set ip ${wan2ip}\n`;
+        config += `        set allowaccess ping https ssh fgfm\n`;
+        config += `    next\n`;
+        config += `end\n\n`;
+      }
+
+      document.getElementById("output").textContent = config;
+    }
+  </script>
+</body>
+</html>
