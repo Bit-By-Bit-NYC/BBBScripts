@@ -12,6 +12,8 @@ using Azure.Core;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 
+
+
 namespace AppdevStaging.Functions
 {
     public static class GetLicensingData
@@ -63,7 +65,11 @@ namespace AppdevStaging.Functions
                         "displayName",
                         "userPrincipalName",
                         "assignedLicenses",
-                        "signInActivity"
+                        "signInActivity",
+                        "accountEnabled",
+                        "mobilePhone",
+                        "businessPhones",
+                        "onPremisesSyncEnabled"
                     };
                     reqConf.QueryParameters.Top = 999;
                 });
@@ -89,15 +95,16 @@ namespace AppdevStaging.Functions
                         var name = dynamicSkuMap.TryGetValue(id, out var skuName)
                             ? skuName
                             : $"Unmapped SKU: {id}";
-
-                        if (!dynamicSkuMap.ContainsKey(id))
-                            log.LogWarning($"⚠ Unmapped SKU GUID: {id}");
-
                         return name;
                     }).ToList() ?? new List<string> { "None" },
 
-                    LastSignInDate = user.SignInActivity?.LastSignInDateTime
+                    LastSignInDate = user.SignInActivity?.LastSignInDateTime,
+                    SignInStatus = user.AccountEnabled == true ? "Enabled" : "Disabled",
+                    MobilePhone = user.MobilePhone,
+                    BusinessPhones = user.BusinessPhones != null ? string.Join(", ", user.BusinessPhones) : null,
+                    IsSyncedFromAD = user.OnPremisesSyncEnabled == true ? "AD Synced" : "Cloud Only"
                 });
+
 
                 var response = req.CreateResponse(HttpStatusCode.OK);
                 await response.WriteAsJsonAsync(results);
