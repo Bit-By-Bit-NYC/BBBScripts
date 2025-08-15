@@ -1,8 +1,14 @@
 ﻿# -----------------------------------------------------------------------------
 # PowerShell Function: Disable-UserAndCleanup
 # -----------------------------------------------------------------------------
-# This function automates the process of disabling a user account and performing
+# This function automates the process of disabling user accounts from a csv and performing
 # common cleanup tasks using Microsoft Graph and Exchange Online PowerShell.
+#
+#Steps: 
+#1. disable login
+#2. Convert mailbox to shared
+#3. Remove from all groups
+#4. removes all licenses
 #
 # Prerequisite Modules:
 # - Microsoft.Graph
