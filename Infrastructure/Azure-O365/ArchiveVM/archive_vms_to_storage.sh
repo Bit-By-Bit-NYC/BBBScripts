@@ -7,8 +7,8 @@ CFG="./config.txt"
 source "$CFG" 2>/dev/null || true
 
 # ---------- sane defaults & aliases ----------
-VM_SUBSCRIPTION_ID="${VM_SUBSCRIPTION_ID:-$SUBSCRIPTION_ID:-}"
-STORAGE_SUBSCRIPTION_ID="${STORAGE_SUBSCRIPTION_ID:-$SUBSCRIPTION_ID:-}"
+VM_SUBSCRIPTION_ID="${VM_SUBSCRIPTION_ID:-${SUBSCRIPTION_ID:-}}"
+STORAGE_SUBSCRIPTION_ID="${STORAGE_SUBSCRIPTION_ID:-${SUBSCRIPTION_ID:-}}"
 
 VM_RESOURCE_GROUP="${VM_RESOURCE_GROUP:-rg-Spirits}"
 STORAGE_RESOURCE_GROUP="${STORAGE_RESOURCE_GROUP:-rg-Spirits-1022621}"
@@ -23,7 +23,14 @@ SRC_SAS_HOURS="${SRC_SAS_HOURS:-24}"
 STOP_VM_FOR_SNAPSHOT="${STOP_VM_FOR_SNAPSHOT:-false}"
 DELETE_SNAPSHOTS_AFTER_COPY="${DELETE_SNAPSHOTS_AFTER_COPY:-true}"
 KEEP_SNAPSHOTS="${KEEP_SNAPSHOTS:-false}"
+
+DRY_RUN="${DRY_RUN:-false}"  # NEW: snapshots only; no uploads/copies
+
 if [[ "${KEEP_SNAPSHOTS,,}" == "true" ]]; then
+  DELETE_SNAPSHOTS_AFTER_COPY=false
+fi
+if [[ "${DRY_RUN,,}" == "true" ]]; then
+  # Force keep snapshots in dry run
   DELETE_SNAPSHOTS_AFTER_COPY=false
 fi
 
@@ -33,6 +40,16 @@ COLD_CONTAINER="${COLD_CONTAINER:-archive-cold}"
 COST_RATE_PAGE_GB="${COST_RATE_PAGE_GB:-0.045}"
 COST_RATE_ARCHIVE_GB="${COST_RATE_ARCHIVE_GB:-0.00099}"
 
+# Cross-platform ISO-UTC helper (works on macOS and Linux)
+iso_utc_in() { # hours
+  local hrs="${1:-72}"
+  python3 - "$hrs" <<'PY'
+import sys,datetime
+hrs=int(sys.argv[1])
+print((datetime.datetime.utcnow()+datetime.timedelta(hours=hrs)).strftime("%Y-%m-%dT%H:%MZ"))
+PY
+}
+
 # Subscriptions summary
 echo "[*] VM subscription:       ${VM_SUBSCRIPTION_ID:-<unset>}"
 echo "[*] Storage subscription:  ${STORAGE_SUBSCRIPTION_ID:-<unset>}"
@@ -41,7 +58,7 @@ echo "[*] Storage RG:            $STORAGE_RESOURCE_GROUP"
 echo "[*] Storage Account:       $STORAGE_ACCOUNT"
 echo "[*] Containers:            page=$CONTAINER  cold=$COLD_CONTAINER (enabled=$ENABLE_COLD_ARCHIVE)"
 echo "[*] Ticket:                $BBB_TICKET"
-echo "[*] STOP_VM_FOR_SNAPSHOT=$STOP_VM_FOR_SNAPSHOT | DELETE_SNAPSHOTS_AFTER_COPY=$DELETE_SNAPSHOTS_AFTER_COPY | KEEP_SNAPSHOTS=$KEEP_SNAPSHOTS"
+echo "[*] STOP_VM_FOR_SNAPSHOT=$STOP_VM_FOR_SNAPSHOT | DELETE_SNAPSHOTS_AFTER_COPY=$DELETE_SNAPSHOTS_AFTER_COPY | KEEP_SNAPSHOTS=$KEEP_SNAPSHOTS | DRY_RUN=$DRY_RUN"
 
 # Remember original subscription to restore later
 ORIG_SUB=$(az account show --query id -o tsv 2>/dev/null || echo "")
@@ -52,7 +69,7 @@ switch_sub() {
   az account set --subscription "$sub"
 }
 
-# ---------- STORAGE MANAGEMENT PLANE (may be different subscription) ----------
+# ---------- STORAGE MANAGEMENT PLANE ----------
 switch_sub "$STORAGE_SUBSCRIPTION_ID"
 
 # Resolve storage account & posture
@@ -65,80 +82,100 @@ PUB_ACCESS="$(echo "$SA_JSON" | jq -r '.publicNetworkAccess // "Enabled"')"
 DEF_ACTION="$(echo "$SA_JSON" | jq -r '.networkRuleSet.defaultAction // "Allow"')"
 echo "[*] Storage publicNetworkAccess=$PUB_ACCESS, defaultAction=$DEF_ACTION"
 
-if [[ "$PUB_ACCESS" != "Enabled" || "$DEF_ACTION" != "Allow" ]]; then
-  echo
-  echo ">>> STORAGE ACCESS IS RESTRICTED."
-  echo "    publicNetworkAccess: $PUB_ACCESS   defaultAction: $DEF_ACTION"
-  read -r -p "Temporarily set to publicNetworkAccess=Enabled and defaultAction=Allow for this run? [y/N] " ANS
-  if [[ "${ANS,,}" == "y" || "${ANS,,}" == "yes" ]]; then
-    az storage account update -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --public-network-access Enabled
-    az storage account update -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --default-action Allow --bypass AzureServices
-    echo "INFO: Storage firewall temporarily opened."
-  else
-    echo "FATAL: Storage remains locked down; uploads will fail. Aborting."
-    exit 1
+if [[ "${DRY_RUN,,}" != "true" ]]; then
+  if [[ "$PUB_ACCESS" != "Enabled" || "$DEF_ACTION" != "Allow" ]]; then
+    echo
+    echo ">>> STORAGE ACCESS IS RESTRICTED (this will block uploads)."
+    echo "    publicNetworkAccess: $PUB_ACCESS   defaultAction: $DEF_ACTION"
+    read -r -p "Temporarily set to publicNetworkAccess=Enabled and defaultAction=Allow for this run? [y/N] " ANS
+    if [[ "${ANS,,}" == "y" || "${ANS,,}" == "yes" ]]; then
+      az storage account update -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --public-network-access Enabled
+      az storage account update -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --default-action Allow --bypass AzureServices
+      echo "INFO: Storage firewall temporarily opened."
+    else
+      echo "FATAL: Storage remains locked down; uploads will fail. Aborting."
+      exit 1
+    fi
   fi
 fi
 
-# Ensure containers (AAD control plane)
-az storage container create --account-name "$STORAGE_ACCOUNT" --name "$CONTAINER" --auth-mode login || true
-if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
-  az storage container create --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" --auth-mode login || true
+# Ensure containers (AAD control plane) — skipped only if DRY_RUN
+if [[ "${DRY_RUN,,}" != "true" ]]; then
+  az storage container create --account-name "$STORAGE_ACCOUNT" --name "$CONTAINER" --auth-mode login || true
+  if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
+    az storage container create --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" --auth-mode login || true
+  fi
 fi
 
 DEST_BASE="https://${STORAGE_ACCOUNT}.blob.core.windows.net/${CONTAINER}"
 COLD_BASE="https://${STORAGE_ACCOUNT}.blob.core.windows.net/${COLD_CONTAINER}"
-END_TIME=$(date -u -d "+${DEST_SAS_HOURS} hour" '+%Y-%m-%dT%H:%MZ')
+END_TIME="$(iso_utc_in "${DEST_SAS_HOURS}")"
 
 # Data-plane RBAC hint (for AAD SAS)
-ME_OID="$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)"
-HAS_DATA_ROLE="$(az role assignment list --assignee-object-id "$ME_OID" --scope "$SA_ID" \
-  --query "[?contains(roleDefinitionName, 'Storage Blob Data')].roleDefinitionName | length(@)" -o tsv 2>/dev/null || echo 0)"
-if [[ "${HAS_DATA_ROLE:-0}" -eq 0 ]]; then
+ME_OID="$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")"
+HAS_DATA_ROLE=0
+if [[ -n "$ME_OID" ]]; then
+  HAS_DATA_ROLE="$(az role assignment list --assignee-object-id "$ME_OID" --scope "$SA_ID" \
+    --query "[?contains(roleDefinitionName, 'Storage Blob Data')].roleDefinitionName | length(@)" -o tsv 2>/dev/null || echo 0)"
+fi
+if [[ "${HAS_DATA_ROLE:-0}" -eq 0 && "${DRY_RUN,,}" != "true" ]]; then
   echo "WARN: No 'Storage Blob Data *' RBAC; user-delegation SAS may fail. Will try account key fallback."
 fi
 
-# Mint SAS for page container
-DEST_SAS="$(az storage container generate-sas \
-  --account-name "$STORAGE_ACCOUNT" --name "$CONTAINER" \
-  --expiry "$END_TIME" --permissions racwdl \
-  --auth-mode login --as-user -o tsv 2>/dev/null || true)"
-if [[ -z "${DEST_SAS:-}" ]]; then
-  SA_KEY="$(az storage account keys list -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --query [0].value -o tsv)"
+# Mint SAS for page container (skip if DRY_RUN)
+DEST_SAS=""
+COLD_SAS=""
+if [[ "${DRY_RUN,,}" != "true" ]]; then
   DEST_SAS="$(az storage container generate-sas \
     --account-name "$STORAGE_ACCOUNT" --name "$CONTAINER" \
     --expiry "$END_TIME" --permissions racwdl \
-    --account-key "$SA_KEY" -o tsv)"
-fi
-
-# Mint SAS for cold container if enabled
-if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
-  COLD_SAS="$(az storage container generate-sas \
-    --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" \
-    --expiry "$END_TIME" --permissions racwdl \
     --auth-mode login --as-user -o tsv 2>/dev/null || true)"
-  if [[ -z "${COLD_SAS:-}" ]]; then
+  if [[ -z "${DEST_SAS:-}" ]]; then
     SA_KEY="$(az storage account keys list -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --query [0].value -o tsv)"
-    COLD_SAS="$(az storage container generate-sas \
-      --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" \
+    DEST_SAS="$(az storage container generate-sas \
+      --account-name "$STORAGE_ACCOUNT" --name "$CONTAINER" \
       --expiry "$END_TIME" --permissions racwdl \
       --account-key "$SA_KEY" -o tsv)"
   fi
-fi
 
-# Preflight write test (quick-fail)
-echo "[*] Preflight: testing AzCopy write to the container..."
-echo "ok" > /tmp/.preflight.txt
-azcopy copy "/tmp/.preflight.txt" "${DEST_BASE}/_preflight/.write.txt?${DEST_SAS}" --overwrite=true
+  if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
+    COLD_SAS="$(az storage container generate-sas \
+      --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" \
+      --expiry "$END_TIME" --permissions racwdl \
+      --auth-mode login --as-user -o tsv 2>/dev/null || true)"
+    if [[ -z "${COLD_SAS:-}" ]]; then
+      SA_KEY="$(az storage account keys list -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --query [0].value -o tsv)"
+      COLD_SAS="$(az storage container generate-sas \
+        --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" \
+        --expiry "$END_TIME" --permissions racwdl \
+        --account-key "$SA_KEY" -o tsv)"
+    fi
+  fi
+
+  # Preflight write test (quick-fail)
+  echo "[*] Preflight: testing AzCopy write to the container..."
+  echo "ok" > /tmp/.preflight.txt
+  azcopy copy "/tmp/.preflight.txt" "${DEST_BASE}/_preflight/.write.txt?${DEST_SAS}" --overwrite=true
+else
+  echo "[*] DRY RUN: skipping container SAS and preflight upload."
+fi
 
 # Helpers
 upload_file() {
   local local_path="$1" blob_rel="$2" sas="$3" base="$4"
+  if [[ "${DRY_RUN,,}" == "true" ]]; then
+    echo "DRY-RUN: would upload ${blob_rel}"
+    return 0
+  fi
   local dest_url="${base}/${blob_rel}?${sas}"
-  azcopy copy "$local_path" "$dest_url" --overwrite=true   # show progress
+  azcopy copy "$local_path" "$dest_url" --overwrite=true
 }
 show_blob() {
   local name="$1" cont="$2"
+  if [[ "${DRY_RUN,,}" == "true" ]]; then
+    echo "DRY-RUN: would show blob ${cont}/${name}"
+    return 0
+  fi
   az storage blob show --account-name "$STORAGE_ACCOUNT" --container-name "$cont" \
     --name "$name" --auth-mode login \
     --query "{blobType:properties.blobType, size:properties.contentLength}"
@@ -164,13 +201,12 @@ create_snapshot_with_retry() {
   printf "%s" "$sid"
 }
 
-# Run context
 TS=$(date -u +"%Y%m%dT%H%M%SZ")
 START=$SECONDS
 TOTAL_PAGE_BYTES=0
 TOTAL_ARCHIVE_BYTES=0
 RUN_META_DIR="_runs/${TS}"
-upload_file <(printf '{"runStartedUtc":"%s","ticket":"%s"}' "$TS" "$BBB_TICKET") "${RUN_META_DIR}/run-start.json" "$DEST_SAS" "$DEST_BASE" || true
+upload_file <(printf '{"runStartedUtc":"%s","ticket":"%s","dryRun":%s}' "$TS" "$BBB_TICKET" "${DRY_RUN,,}") "${RUN_META_DIR}/run-start.json" "${DEST_SAS:-}" "$DEST_BASE" || true
 
 # ---------- VM MANAGEMENT PLANE ----------
 switch_sub "$VM_SUBSCRIPTION_ID"
@@ -221,13 +257,13 @@ for VM in "${VM_LIST[@]}"; do
 
   echo "[4/9] Upload metadata ..."
   switch_sub "$STORAGE_SUBSCRIPTION_ID"
-  upload_file "${TMPDIR}/manifest.yaml" "${DEST_PREFIX}/_meta/manifest.yaml" "$DEST_SAS" "$DEST_BASE"
-  upload_file "${TMPDIR}/vm.json"       "${DEST_PREFIX}/_meta/vm.json"       "$DEST_SAS" "$DEST_BASE"
-  upload_file "${TMPDIR}/ip.json"       "${DEST_PREFIX}/_meta/ip.json"       "$DEST_SAS" "$DEST_BASE"
-  upload_file "${TMPDIR}/nics.txt"      "${DEST_PREFIX}/_meta/nics.txt"      "$DEST_SAS" "$DEST_BASE"
-  show_blob "${DEST_PREFIX}/_meta/manifest.yaml" "$CONTAINER" >/dev/null
+  upload_file "${TMPDIR}/manifest.yaml" "${DEST_PREFIX}/_meta/manifest.yaml" "${DEST_SAS:-}" "$DEST_BASE"
+  upload_file "${TMPDIR}/vm.json"       "${DEST_PREFIX}/_meta/vm.json"       "${DEST_SAS:-}" "$DEST_BASE"
+  upload_file "${TMPDIR}/ip.json"       "${DEST_PREFIX}/_meta/ip.json"       "${DEST_SAS:-}" "$DEST_BASE"
+  upload_file "${TMPDIR}/nics.txt"      "${DEST_PREFIX}/_meta/nics.txt"      "${DEST_SAS:-}" "$DEST_BASE"
+  show_blob "${DEST_PREFIX}/_meta/manifest.yaml" "$CONTAINER" >/dev/null || true
 
-  # Upload restore steps reference
+  # Upload restore steps reference (skipped in DRY_RUN)
   cat > "${TMPDIR}/restore_steps.txt" <<'RST'
 RESTORE GUIDE (from archived VHDs)
 
@@ -244,7 +280,7 @@ A) FAST PATH (page-blob VHDs):
 
 B) COLD PATH (block-blob Archive), only if you enabled cold copies:
 1) Rehydrate archive blob to Cool:
-   az storage blob set-tier --tier Cool --rehydrate-priority High --name <vm>/<ts>/<disk>.vhd -c <cold-container> -n <blob> --auth-mode login
+   az storage blob set-tier --tier Cool --rehydrate-priority High --name <vm>/<ts>/<disk>.vhd -c <cold-container> --auth-mode login
    Wait until rehydrate completes (archiveStatus clears).
 2) Convert to page blob:
    - Get size: az storage blob show ... --query properties.contentLength
@@ -253,14 +289,14 @@ B) COLD PATH (block-blob Archive), only if you enabled cold copies:
    - Server-side copy:
      az storage blob copy start --destination-container <page-container> --destination-blob <path> \
        --source-uri "https://<account>.blob.core.windows.net/<cold-container>/<path>?<sas>" --auth-mode login
-   - Wait for copyStatus=success, then proceed as in A) with that page blob URL.
+   - Wait for copyStatus=success, then proceed as in A).
 
 Notes:
-- Generation: If VM was Gen2, Azure will infer when creating disk. If needed: az disk create --hyper-v-generation V2
-- Regions: import must be in same region as storage account.
-- Permissions: you need Storage Blob Data rights (AAD) or SAS with read access to the VHDs.
+- Generation: If VM was Gen2, Azure usually infers; else use --hyper-v-generation V2.
+- Region affinity: import must be in same region as storage account.
+- Permissions: Blob Data RBAC or SAS required for VHD reads.
 RST
-  upload_file "${TMPDIR}/restore_steps.txt" "${DEST_PREFIX}/_meta/restore_steps.txt" "$DEST_SAS" "$DEST_BASE"
+  upload_file "${TMPDIR}/restore_steps.txt" "${DEST_PREFIX}/_meta/restore_steps.txt" "${DEST_SAS:-}" "$DEST_BASE"
 
   echo "[5/9] Snapshots ..."
   switch_sub "$VM_SUBSCRIPTION_ID"
@@ -278,41 +314,51 @@ RST
   done
   [[ ${#SNAP_IDS[@]} -gt 0 ]] || { echo "FATAL: no snapshots created; aborting."; exit 1; }
 
-  echo "[6/9] Copy snapshots to VHD page blobs ..."
-  COPIED_VHDS=()
-  for SID in "${SNAP_IDS[@]}"; do
-    SNAME="$(az snapshot show --ids "$SID" --query name -o tsv)"
-    ORIG_DNAME="${SNAME#"${VM}-"}"; ORIG_DNAME="${ORIG_DNAME%"-${TS}"}"
-    DEST_VHD_NAME="${ORIG_DNAME}.vhd"
-    DEST_PATH="${DEST_PREFIX}/${DEST_VHD_NAME}"
-    SRC_SAS_URL="$(az snapshot grant-access --ids "$SID" --duration-in-seconds $(( SRC_SAS_HOURS*3600 )) --access-level Read --query accessSAS -o tsv)"
-
-    switch_sub "$STORAGE_SUBSCRIPTION_ID"
-    echo "   -> Copy $DEST_VHD_NAME"
-    azcopy copy "$SRC_SAS_URL" "${DEST_BASE}/${DEST_PATH}?${DEST_SAS}" --overwrite=true
-
-    PROPS="$(show_blob "${DEST_PATH}" "$CONTAINER")"
-    echo "      ${PROPS}"
-    BYTES="$(az storage blob show --account-name "$STORAGE_ACCOUNT" --container-name "$CONTAINER" \
-             --name "${DEST_PATH}" --auth-mode login --query "properties.contentLength" -o tsv)"
-    TOTAL_PAGE_BYTES=$((TOTAL_PAGE_BYTES + BYTES))
-    COPIED_VHDS+=("${DEST_PATH}")
-  done
-
-  if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
-    echo "[7/9] Cold archive copies (Block Blob -> Archive tier) ..."
-    for PATH in "${COPIED_VHDS[@]}"; do
-      COLD_PATH="${PATH}"
-      echo "   -> Cold copy $(basename "$PATH")"
-      azcopy copy "${DEST_BASE}/${PATH}?${DEST_SAS}" "${COLD_BASE}/${COLD_PATH}?${COLD_SAS}" --overwrite=true
-      az storage blob set-tier --account-name "$STORAGE_ACCOUNT" --container-name "$COLD_CONTAINER" \
-        --name "$COLD_PATH" --tier Archive --auth-mode login
-      C_BYTES="$(az storage blob show --account-name "$STORAGE_ACCOUNT" --container-name "$COLD_CONTAINER" \
-                 --name "$COLD_PATH" --auth-mode login --query "properties.contentLength" -o tsv)"
-      TOTAL_ARCHIVE_BYTES=$((TOTAL_ARCHIVE_BYTES + C_BYTES))
+  if [[ "${DRY_RUN,,}" == "true" ]]; then
+    echo "[6/9] DRY RUN: skipping VHD copy. Would have copied:"
+    for SID in "${SNAP_IDS[@]}"; do
+      SNAME="$(az snapshot show --ids "$SID" --query name -o tsv)"
+      ORIG_DNAME="${SNAME#"${VM}-"}"; ORIG_DNAME="${ORIG_DNAME%"-${TS}"}"
+      echo "      ${DEST_BASE}/${VM}/${TS}/${ORIG_DNAME}.vhd"
     done
+    echo "[7/9] DRY RUN: skipping cold-archive copies."
   else
-    echo "[7/9] Cold archive disabled"
+    echo "[6/9] Copy snapshots to VHD page blobs ..."
+    COPIED_VHDS=()
+    for SID in "${SNAP_IDS[@]}"; do
+      SNAME="$(az snapshot show --ids "$SID" --query name -o tsv)"
+      ORIG_DNAME="${SNAME#"${VM}-"}"; ORIG_DNAME="${ORIG_DNAME%"-${TS}"}"
+      DEST_VHD_NAME="${ORIG_DNAME}.vhd"
+      DEST_PATH="${DEST_PREFIX}/${DEST_VHD_NAME}"
+      SRC_SAS_URL="$(az snapshot grant-access --ids "$SID" --duration-in-seconds $(( SRC_SAS_HOURS*3600 )) --access-level Read --query accessSAS -o tsv)"
+
+      switch_sub "$STORAGE_SUBSCRIPTION_ID"
+      echo "   -> Copy $DEST_VHD_NAME"
+      azcopy copy "$SRC_SAS_URL" "${DEST_BASE}/${DEST_PATH}?${DEST_SAS}" --overwrite=true
+
+      PROPS="$(show_blob "${DEST_PATH}" "$CONTAINER")"
+      echo "      ${PROPS}"
+      BYTES="$(az storage blob show --account-name "$STORAGE_ACCOUNT" --container-name "$CONTAINER" \
+               --name "${DEST_PATH}" --auth-mode login --query "properties.contentLength" -o tsv)"
+      TOTAL_PAGE_BYTES=$((TOTAL_PAGE_BYTES + BYTES))
+      COPIED_VHDS+=("${DEST_PATH}")
+    done
+
+    if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
+      echo "[7/9] Cold archive copies (Block Blob -> Archive tier) ..."
+      for PATH in "${COPIED_VHDS[@]}"; do
+        COLD_PATH="${PATH}"
+        echo "   -> Cold copy $(basename "$PATH")"
+        azcopy copy "${DEST_BASE}/${PATH}?${DEST_SAS}" "${COLD_BASE}/${COLD_PATH}?${COLD_SAS}" --overwrite=true
+        az storage blob set-tier --account-name "$STORAGE_ACCOUNT" --container-name "$COLD_CONTAINER" \
+          --name "$COLD_PATH" --tier Archive --auth-mode login
+        C_BYTES="$(az storage blob show --account-name "$STORAGE_ACCOUNT" --container-name "$COLD_CONTAINER" \
+                   --name "$COLD_PATH" --auth-mode login --query "properties.contentLength" -o tsv)"
+        TOTAL_ARCHIVE_BYTES=$((TOTAL_ARCHIVE_BYTES + C_BYTES))
+      done
+    else
+      echo "[7/9] Cold archive disabled"
+    fi
   fi
 
   echo "[8/9] README ..."
@@ -325,7 +371,7 @@ Archived VM materials for later restore.
 ****************************************************/
 TXT
   switch_sub "$STORAGE_SUBSCRIPTION_ID"
-  upload_file "${TMPDIR}/README.txt" "${DEST_PREFIX}/_meta/README.txt" "$DEST_SAS" "$DEST_BASE"
+  upload_file "${TMPDIR}/README.txt" "${DEST_PREFIX}/_meta/README.txt" "${DEST_SAS:-}" "$DEST_BASE"
 
   if [[ "${STOP_VM_FOR_SNAPSHOT,,}" == "true" ]]; then
     switch_sub "$VM_SUBSCRIPTION_ID"
@@ -333,14 +379,15 @@ TXT
     az vm start -g "$VM_RESOURCE_GROUP" -n "$VM" || echo "WARN: start failed"
   fi
 
-  if [[ "${DELETE_SNAPSHOTS_AFTER_COPY,,}" == "true" ]]; then
+  # Snapshot cleanup
+  if [[ "${DELETE_SNAPSHOTS_AFTER_COPY,,}" == "true" && "${DRY_RUN,,}" != "true" ]]; then
     switch_sub "$VM_SUBSCRIPTION_ID"
     echo "[*] Deleting snapshots for $VM ..."
     for SID in "${SNAP_IDS[@]}"; do
       az snapshot delete --ids "$SID" || echo "WARN: snapshot delete failed for $SID"
     done
   else
-    echo "INFO: Keeping snapshots for $VM (DELETE_SNAPSHOTS_AFTER_COPY=false or KEEP_SNAPSHOTS=true)."
+    echo "INFO: Keeping snapshots for $VM (DELETE_SNAPSHOTS_AFTER_COPY=false or DRY_RUN=true)."
   fi
 
   rm -rf "$TMPDIR"
@@ -350,39 +397,40 @@ done
 DUR=$((SECONDS-START))
 
 # ---------- COST ESTIMATE ----------
-GB=$((1024*1024*1024))
-PAGE_GB=$(python3 - <<PY
+if [[ "${DRY_RUN,,}" != "true" ]]; then
+  GB=$((1024*1024*1024))
+  PAGE_GB=$(python3 - <<PY
 print(round(${TOTAL_PAGE_BYTES}/$GB, 2))
 PY
 )
-ARCH_GB=$(python3 - <<PY
+  ARCH_GB=$(python3 - <<PY
 print(round(${TOTAL_ARCHIVE_BYTES}/$GB, 2))
 PY
 )
-EST_PAGE_COST=$(python3 - <<PY
+  EST_PAGE_COST=$(python3 - <<PY
 print(round(${TOTAL_PAGE_BYTES}/$GB * ${COST_RATE_PAGE_GB}, 2))
 PY
 )
-EST_ARCH_COST=$(python3 - <<PY
+  EST_ARCH_COST=$(python3 - <<PY
 print(round(${TOTAL_ARCHIVE_BYTES}/$GB * ${COST_RATE_ARCHIVE_GB}, 2))
 PY
 )
-EST_TOTAL=$(python3 - <<PY
+  EST_TOTAL=$(python3 - <<PY
 print(round(${TOTAL_PAGE_BYTES}/$GB * ${COST_RATE_PAGE_GB} + ${TOTAL_ARCHIVE_BYTES}/$GB * ${COST_RATE_ARCHIVE_GB}, 2))
 PY
 )
 
-echo
-echo "===== Rough Monthly Storage Estimate ====="
-echo "Page blobs (VHDs):  ${PAGE_GB} GB  @ \$${COST_RATE_PAGE_GB}/GB-mo  ≈ \$${EST_PAGE_COST}/mo"
-if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
-  echo "Archive blobs:      ${ARCH_GB} GB  @ \$${COST_RATE_ARCHIVE_GB}/GB-mo  ≈ \$${EST_ARCH_COST}/mo"
-fi
-echo "-----------------------------------------"
-echo "Estimated total:    \$${EST_TOTAL}/mo (capacity only)"
-echo "NOTE: Approximate; excludes transactions/rehydration and regional price diffs."
+  echo
+  echo "===== Rough Monthly Storage Estimate ====="
+  echo "Page blobs (VHDs):  ${PAGE_GB} GB  @ \$${COST_RATE_PAGE_GB}/GB-mo  ≈ \$${EST_PAGE_COST}/mo"
+  if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
+    echo "Archive blobs:      ${ARCH_GB} GB  @ \$${COST_RATE_ARCHIVE_GB}/GB-mo  ≈ \$${EST_ARCH_COST}/mo"
+  fi
+  echo "-----------------------------------------"
+  echo "Estimated total:    \$${EST_TOTAL}/mo (capacity only)"
+  echo "NOTE: Approximate; excludes transactions/rehydration and regional price diffs."
 
-SUMMARY_JSON=$(cat <<J
+  SUMMARY_JSON=$(cat <<J
 {
   "ticket": "${BBB_TICKET}",
   "run": "${TS}",
@@ -400,10 +448,14 @@ SUMMARY_JSON=$(cat <<J
 }
 J
 )
-echo "$SUMMARY_JSON" | jq .
-
-switch_sub "$STORAGE_SUBSCRIPTION_ID"
-upload_file <(printf "%s" "$SUMMARY_JSON") "_runs/${TS}/cost-summary.json" "$DEST_SAS" "$DEST_BASE" || true
+  echo "$SUMMARY_JSON" | jq .
+  switch_sub "$STORAGE_SUBSCRIPTION_ID"
+  upload_file <(printf "%s" "$SUMMARY_JSON") "_runs/${TS}/cost-summary.json" "${DEST_SAS:-}" "$DEST_BASE" || true
+else
+  echo
+  echo "===== DRY RUN COMPLETE ====="
+  echo "Snapshots were created; no uploads or VHD copies were performed."
+fi
 
 # ---------- SECURITY VALIDATION ----------
 echo
@@ -434,19 +486,19 @@ if [[ "$BLOB_VERSION" != "true" || "$SOFT_DELETE" != "true" ]]; then
 fi
 echo "=============================================="
 
-# Final prompt to re-secure firewall
-echo
-read -r -p "Re-secure storage (set defaultAction=Deny again)? [Y/n] " RES
-if [[ -z "${RES:-}" || "${RES,,}" == "y" || "${RES,,}" == "yes" ]]; then
-  az storage account update -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" \
-    --default-action Deny --bypass AzureServices
-  echo "INFO: Storage firewall set to Deny."
-else
-  echo "INFO: Leaving storage firewall as-is (Allow)."
+# Final prompt to re-secure firewall (skip in DRY RUN if nothing was opened)
+if [[ "${DRY_RUN,,}" != "true" ]]; then
+  echo
+  read -r -p "Re-secure storage (set defaultAction=Deny again)? [Y/n] " RES
+  if [[ -z "${RES:-}" || "${RES,,}" == "y" || "${RES,,}" == "yes" ]]; then
+    az storage account update -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" \
+      --default-action Deny --bypass AzureServices
+    echo "INFO: Storage firewall set to Deny."
+  else
+    echo "INFO: Leaving storage firewall as-is (Allow)."
+  fi
 fi
 
 # Restore original subscription (if any)
 [[ -n "$ORIG_SUB" ]] && az account set --subscription "$ORIG_SUB" || true
-echo "[*] 
-
 
