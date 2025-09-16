@@ -16,7 +16,8 @@ STOP_VM_FOR_SNAPSHOT=false
 DELETE_SNAPSHOTS_AFTER_COPY=FALSE
 
 # Cold archive companion copies
-ENABLE_COLD_ARCHIVE=false
+COLD_ONLY=true
+ENABLE_COLD_ARCHIVE=true
 COLD_CONTAINER=archive-cold
 
 # Approximate prices (USD per GB-month) — adjust for your region if you want

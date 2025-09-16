@@ -179,6 +179,139 @@ else
   echo "[*] DRY RUN: skipping container SAS and preflight upload."
 fi
 
+# ======================= COLD-ONLY MODE =======================
+# Copies existing page-blob VHDs under "archive/<prefix>/*.vhd" to "archive-cold/<same>" and sets Archive tier.
+# Skips VM snapshot/copy entirely.
+COLD_ONLY="${COLD_ONLY:-false}"
+COLD_SOURCE_PREFIX="${COLD_SOURCE_PREFIX:-}"
+
+if [[ "${COLD_ONLY,,}" == "true" ]]; then
+  echo
+  echo "[*] COLD_ONLY: copying existing VHDs from '${CONTAINER}/${COLD_SOURCE_PREFIX}' to '${COLD_CONTAINER}/' and setting Archive tier"
+
+  # Ensure cold container exists
+  az storage container create --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" --auth-mode login >/dev/null || true
+
+  # Generate SAS for server-side copy if we don't already have them
+  if [[ -z "${DEST_SAS:-}" ]]; then
+    END_TIME="$(iso_utc_in "${DEST_SAS_HOURS:-72}")"
+    # page container SAS
+    DEST_SAS="$(az storage container generate-sas \
+      --account-name "$STORAGE_ACCOUNT" --name "$CONTAINER" \
+      --expiry "$END_TIME" --permissions rl \
+      --auth-mode login --as-user -o tsv 2>/dev/null || true)"
+    if [[ -z "${DEST_SAS:-}" ]]; then
+      SA_KEY="$(az storage account keys list -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --query [0].value -o tsv)"
+      DEST_SAS="$(az storage container generate-sas \
+        --account-name "$STORAGE_ACCOUNT" --name "$CONTAINER" \
+        --expiry "$END_TIME" --permissions rl \
+        --account-key "$SA_KEY" -o tsv)"
+    fi
+  fi
+  if [[ -z "${COLD_SAS:-}" ]]; then
+    END_TIME="$(iso_utc_in "${DEST_SAS_HOURS:-72}")"
+    COLD_SAS="$(az storage container generate-sas \
+      --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" \
+      --expiry "$END_TIME" --permissions rwa \
+      --auth-mode login --as-user -o tsv 2>/dev/null || true)"
+    if [[ -z "${COLD_SAS:-}" ]]; then
+      SA_KEY="$(az storage account keys list -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --query [0].value -o tsv)"
+      COLD_SAS="$(az storage container generate-sas \
+        --account-name "$STORAGE_ACCOUNT" --name "$COLD_CONTAINER" \
+        --expiry "$END_TIME" --permissions rwa \
+        --account-key "$SA_KEY" -o tsv)"
+    fi
+  fi
+
+  # List VHDs to copy
+  echo "[*] Enumerating source VHDs in '${CONTAINER}/${COLD_SOURCE_PREFIX}'..."
+  mapfile -t SRC_VHDS < <(az storage blob list \
+      --account-name "$STORAGE_ACCOUNT" \
+      --container-name "$CONTAINER" \
+      --prefix "${COLD_SOURCE_PREFIX}" \
+      --auth-mode login \
+      --query "[?ends_with(name, '.vhd')].name" -o tsv)
+
+  if (( ${#SRC_VHDS[@]} == 0 )); then
+    echo "FATAL: No .vhd blobs found under '${CONTAINER}/${COLD_SOURCE_PREFIX}'."
+    exit 1
+  fi
+
+  # Copy to cold and set Archive tier
+  TOTAL_ARCHIVE_BYTES=0
+  for NAME in "${SRC_VHDS[@]}"; do
+    echo "   -> Cold copy ${NAME}"
+    azcopy copy \
+      "https://${STORAGE_ACCOUNT}.blob.core.windows.net/${CONTAINER}/${NAME}?${DEST_SAS}" \
+      "https://${STORAGE_ACCOUNT}.blob.core.windows.net/${COLD_CONTAINER}/${NAME}?${COLD_SAS}" \
+      --overwrite=false
+
+    # Set Archive tier (idempotent)
+    az storage blob set-tier \
+      --account-name "$STORAGE_ACCOUNT" \
+      --container-name "$COLD_CONTAINER" \
+      --name "$NAME" \
+      --tier Archive \
+      --auth-mode login
+
+    # Sum size
+    BYTES="$(az storage blob show \
+      --account-name "$STORAGE_ACCOUNT" \
+      --container-name "$COLD_CONTAINER" \
+      --name "$NAME" \
+      --auth-mode login \
+      --query 'properties.contentLength' -o tsv)"
+    TOTAL_ARCHIVE_BYTES=$((TOTAL_ARCHIVE_BYTES + BYTES))
+  done
+
+  # ----- COST ESTIMATE (cold-only) -----
+  COST_RATE_ARCHIVE_GB="${COST_RATE_ARCHIVE_GB:-0.00099}"
+  GB=$((1024*1024*1024))
+  ARCH_GB=$(python3 - <<PY
+print(round(${TOTAL_ARCHIVE_BYTES}/$GB, 2))
+PY
+)
+  EST_ARCH_COST=$(python3 - <<PY
+print(round(${TOTAL_ARCHIVE_BYTES}/$GB * ${COST_RATE_ARCHIVE_GB}, 2))
+PY
+)
+
+  TS_NOW=$(date -u +"%Y%m%dT%H%M%SZ")
+  echo
+  echo "===== Rough Monthly Storage Estimate (COLD ONLY) ====="
+  echo "Archive blobs:      ${ARCH_GB} GB  @ \$${COST_RATE_ARCHIVE_GB}/GB-mo  ≈ \$${EST_ARCH_COST}/mo"
+  echo "NOTE: Capacity only; excludes transactions/rehydration and regional variance."
+
+  SUMMARY_JSON=$(cat <<J
+{
+  "mode": "COLD_ONLY",
+  "ticket": "${BBB_TICKET}",
+  "run": "${TS_NOW}",
+  "storageAccount": "${STORAGE_ACCOUNT}",
+  "containers": {"page":"${CONTAINER}", "cold":"${COLD_CONTAINER}"},
+  "prefixFilter": "${COLD_SOURCE_PREFIX}",
+  "bytes": { "archive": ${TOTAL_ARCHIVE_BYTES} },
+  "gb":    { "archive": ${ARCH_GB} },
+  "rates": { "archiveUSDPerGBMonth": ${COST_RATE_ARCHIVE_GB} },
+  "estimateUSDPerMonth": { "archive": ${EST_ARCH_COST} }
+}
+J
+)
+  echo "$SUMMARY_JSON" | jq .
+
+  # Write cost summary under _runs/<now>/cost-summary.json (in page container to keep convention)
+  DEST_SAS_RUN="${DEST_SAS}"
+  azcopy copy \
+    <(printf "%s" "$SUMMARY_JSON") \
+    "https://${STORAGE_ACCOUNT}.blob.core.windows.net/${CONTAINER}/_runs/${TS_NOW}/cost-summary.json?${DEST_SAS_RUN}" \
+    --from-to=LocalBlob --overwrite=true
+
+  echo
+  echo "COLD_ONLY complete. Cold copies live under '${COLD_CONTAINER}/${COLD_SOURCE_PREFIX}'."
+  exit 0
+fi
+# ===================== END COLD-ONLY MODE =====================
+
 # Helpers
 # Build a valid snapshot name (<=80 chars), using vm + diskShort + ts and a short hash
 safe_snap_name() {
