@@ -22,3 +22,4 @@ COLD_CONTAINER=archive-cold
 # Approximate prices (USD per GB-month) — adjust for your region if you want
 COST_RATE_PAGE_GB=0.045
 COST_RATE_ARCHIVE_GB=0.00099
+DRY_RUN=false

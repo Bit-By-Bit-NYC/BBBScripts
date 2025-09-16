@@ -44,9 +44,10 @@ COST_RATE_ARCHIVE_GB="${COST_RATE_ARCHIVE_GB:-0.00099}"
 iso_utc_in() { # hours
   local hrs="${1:-72}"
   python3 - "$hrs" <<'PY'
-import sys,datetime
-hrs=int(sys.argv[1])
-print((datetime.datetime.utcnow()+datetime.timedelta(hours=hrs)).strftime("%Y-%m-%dT%H:%MZ"))
+import sys, datetime
+hrs = int(sys.argv[1])
+now = datetime.datetime.now(datetime.timezone.utc)
+print((now + datetime.timedelta(hours=hrs)).strftime("%Y-%m-%dT%H:%MZ"))
 PY
 }
 
@@ -71,7 +72,25 @@ switch_sub() {
 
 # ---------- STORAGE MANAGEMENT PLANE ----------
 switch_sub "$STORAGE_SUBSCRIPTION_ID"
+# --- Ensure RG and Storage Account exist ---
+switch_sub "$STORAGE_SUBSCRIPTION_ID"
 
+# Create resource group if missing
+if ! az group show --name "$STORAGE_RESOURCE_GROUP" >/dev/null 2>&1; then
+  echo "[*] Creating storage resource group $STORAGE_RESOURCE_GROUP ..."
+  az group create --name "$STORAGE_RESOURCE_GROUP" --location eastus2   # or your preferred region
+fi
+
+# Create storage account if missing
+if ! az storage account show -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" >/dev/null 2>&1; then
+  echo "[*] Creating storage account $STORAGE_ACCOUNT ..."
+  az storage account create \
+     --name "$STORAGE_ACCOUNT" \
+     --resource-group "$STORAGE_RESOURCE_GROUP" \
+     --sku Standard_LRS \
+     --kind StorageV2 \
+     --access-tier Hot
+fi
 # Resolve storage account & posture
 SA_JSON="$(az storage account show -g "$STORAGE_RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" -o json)"
 SA_ID="$(echo "$SA_JSON" | jq -r .id)"
@@ -161,6 +180,31 @@ else
 fi
 
 # Helpers
+# Build a valid snapshot name (<=80 chars), using vm + diskShort + ts and a short hash
+safe_snap_name() {
+  local vm="$1" disk_short="$2" ts="$3" disk_id="$4"
+
+  # Allowed: letters, numbers, hyphen, underscore (Azure is permissive with -/_)
+  local base="${vm}-${disk_short}"
+  base="$(printf "%s" "$base" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_-]+/-/g; s/-{2,}/-/g; s/^[-_]+|[-_]+$//g')"
+
+  # Tiny hash from disk id to keep uniqueness even after truncation
+  local h; h="$(printf "%s" "$disk_id" | shasum -a 256 | cut -c1-6)"
+
+  # Compose final with timestamp and hash: <base>-<ts>-<h>
+  local final="${base}-${ts}-${h}"
+
+  # Truncate to 80 chars max
+  if (( ${#final} > 80 )); then
+    # leave room for "-<ts>-<h>" (len = 1 + len(ts) + 1 + 6)
+    local tail_len=$((1 + ${#ts} + 1 + 6))
+    local keep_len=$((80 - tail_len))
+    base="${base:0:$keep_len}"
+    final="${base}-${ts}-${h}"
+  fi
+  printf "%s" "$final"
+}
+
 upload_file() {
   local local_path="$1" blob_rel="$2" sas="$3" base="$4"
   if [[ "${DRY_RUN,,}" == "true" ]]; then
@@ -183,21 +227,32 @@ show_blob() {
 create_snapshot_with_retry() {
   local disk_id="$1" snap_name="$2" rg="$3"
   local sid=""
+
+  # Attempt 1: capture ONLY stdout (ID), drop stderr
   sid="$(az snapshot create -g "$rg" -n "$snap_name" --source "$disk_id" \
-        --tags "bbb-ticket=$BBB_TICKET" "source=disk" --query id -o tsv 2>/dev/null || true)"
-  if [[ -z "${sid:-}" ]]; then
-    echo "WARN: snapshot create returned empty for $snap_name — retrying with verbose output…"
+        --tags "bbb-ticket=$BBB_TICKET" "source=disk" \
+        --query id -o tsv 2>/dev/null || true)"
+
+  # Validate the ID format
+  if [[ ! "$sid" =~ ^/subscriptions/.*/providers/Microsoft\.Compute/snapshots/.*$ ]]; then
+    echo "WARN: snapshot create did not return an ID for $snap_name (attempt 1)" >&2
+    # Attempt 2: still capture only stdout; let az print errors to the terminal
     sid="$(az snapshot create -g "$rg" -n "$snap_name" --source "$disk_id" \
-          --tags "bbb-ticket=$BBB_TICKET" "source=disk" --query id -o tsv 2>&1 || true)"
-    if [[ ! "$sid" =~ ^/subscriptions/.*/providers/Microsoft\.Compute/snapshots/.*$ ]]; then
-      echo "ERROR creating snapshot $snap_name:"
-      echo "$sid"
-      sid=""
-    fi
+          --tags "bbb-ticket=$BBB_TICKET" "source=disk" \
+          --query id -o tsv 2>/dev/null || true)"
   fi
-  if [[ -n "${sid:-}" ]]; then
-    az snapshot show --ids "$sid" --query "{name:name,time:timeCreated}" -o tsv
+
+  # Final check; if still bad, show one verbose call (to stderr) and give up
+  if [[ ! "$sid" =~ ^/subscriptions/.*/providers/Microsoft\.Compute/snapshots/.*$ ]]; then
+    echo "ERROR: snapshot create failed for $snap_name — verbose output follows:" >&2
+    az snapshot create -g "$rg" -n "$snap_name" --source "$disk_id" \
+      --tags "bbb-ticket=$BBB_TICKET" "source=disk" -o json 1>/dev/null
+    sid=""
+  else
+    # Quiet verify without polluting stdout
+    az snapshot show --ids "$sid" --query "{name:name,time:timeCreated}" -o tsv >/dev/null 2>&1 || true
   fi
+
   printf "%s" "$sid"
 }
 
@@ -223,6 +278,7 @@ fi
 
 for VM in "${VM_LIST[@]}"; do
   echo -e "\n=== VM: $VM =========================================="
+  switch_sub "$VM_SUBSCRIPTION_ID"   # <--- ADD THIS
   DEST_PREFIX="${VM}/${TS}"
 
   if [[ "${STOP_VM_FOR_SNAPSHOT,,}" == "true" ]]; then
@@ -264,50 +320,145 @@ for VM in "${VM_LIST[@]}"; do
   show_blob "${DEST_PREFIX}/_meta/manifest.yaml" "$CONTAINER" >/dev/null || true
 
   # Upload restore steps reference (skipped in DRY_RUN)
-  cat > "${TMPDIR}/restore_steps.txt" <<'RST'
-RESTORE GUIDE (from archived VHDs)
+ # ----- Build a concrete restore guide for THIS VM -----
+# Gather details we already have for this VM
+switch_sub "$VM_SUBSCRIPTION_ID"
+OS_TYPE="$(echo "$VM_JSON" | jq -r '.storageProfile.osDisk.osType // empty')"
+VM_SIZE="$(echo "$VM_JSON" | jq -r '.hardwareProfile.vmSize // empty')"
+OS_DISK_ID="$(echo "$VM_JSON" | jq -r '.storageProfile.osDisk.managedDisk.id')"
+OS_SHORT="$(basename "$OS_DISK_ID")"
 
-A) FAST PATH (page-blob VHDs):
-1) Pick OS VHD path in the archive container: <vm>/<timestamp>/<osdisk>.vhd
-2) Create managed disk from the VHD:
-   az disk create -g <rg> -n <osdisk-name> --source "https://<account>.blob.core.windows.net/<container>/<path>?<sas>"
-3) Create VM from that disk:
-   az vm create -g <rg> -n <vm-name> --attach-os-disk <osdisk-id> --os-type <Linux|Windows> --size <vmSize>
-4) For each data disk VHD:
-   - az disk create --source "<block SAS URL>"
-   - az vm disk attach --vm-name <vm-name> --disk <disk-id> --lun <original-lun>
-5) Recreate/attach NIC(s) (see _meta/ip.json and _meta/nics.txt). Apply tags/diagnostics from _meta/vm.json.
+# Build arrays for data disks: LUN -> short name
+mapfile -t DATA_LUNS < <(echo "$VM_JSON" | jq -r '[.storageProfile.dataDisks[]? | .lun] | .[]')
+mapfile -t DATA_IDS  < <(echo "$VM_JSON" | jq -r '[.storageProfile.dataDisks[]? | .managedDisk.id] | .[]')
+DATA_SHORTS=()
+for DIDX in "${!DATA_IDS[@]}"; do
+  DATA_SHORTS+=("$(basename "${DATA_IDS[$DIDX]}")")
+done
 
-B) COLD PATH (block-blob Archive), only if you enabled cold copies:
-1) Rehydrate archive blob to Cool:
-   az storage blob set-tier --tier Cool --rehydrate-priority High --name <vm>/<ts>/<disk>.vhd -c <cold-container> --auth-mode login
-   Wait until rehydrate completes (archiveStatus clears).
-2) Convert to page blob:
-   - Get size: az storage blob show ... --query properties.contentLength
-   - Create empty page blob in page container (same size):
-     az storage blob create --type page --content-length <size> -c <page-container> -n <path> --auth-mode login
-   - Server-side copy:
-     az storage blob copy start --destination-container <page-container> --destination-blob <path> \
-       --source-uri "https://<account>.blob.core.windows.net/<cold-container>/<path>?<sas>" --auth-mode login
-   - Wait for copyStatus=success, then proceed as in A).
+# Destinations (exact)
+PAGE_CONT="${CONTAINER}"
+PAGE_BASE="https://${STORAGE_ACCOUNT}.blob.core.windows.net/${PAGE_CONT}"
+COLD_CONT="${COLD_CONTAINER}"
+COLD_BASE="https://${STORAGE_ACCOUNT}.blob.core.windows.net/${COLD_CONT}"
 
-Notes:
-- Generation: If VM was Gen2, Azure usually infers; else use --hyper-v-generation V2.
-- Region affinity: import must be in same region as storage account.
-- Permissions: Blob Data RBAC or SAS required for VHD reads.
-RST
-  upload_file "${TMPDIR}/restore_steps.txt" "${DEST_PREFIX}/_meta/restore_steps.txt" "${DEST_SAS:-}" "$DEST_BASE"
+# Compose per-disk page-blob paths (what our copy creates)
+OS_VHD_PATH="${VM}/${TS}/${OS_SHORT}.vhd"
+DATA_VHD_PATHS=()
+for s in "${DATA_SHORTS[@]}"; do DATA_VHD_PATHS+=("${VM}/${TS}/${s}.vhd"); done
 
+# Choose OS type text for az (fallback if unknown)
+if [[ -z "${OS_TYPE:-}" ]]; then
+  OS_TYPE_PLACEHOLDER="<Linux|Windows>"
+else
+  # normalize to Linux|Windows
+  case "${OS_TYPE^^}" in
+    WINDOWS) OS_TYPE="Windows" ;;
+    LINUX)   OS_TYPE="Linux" ;;
+    *)       OS_TYPE="<Linux|Windows>" ;;
+  esac
+fi
+
+# Create restore_steps.txt with concrete commands and exact paths
+{
+  echo "RESTORE GUIDE for VM: ${VM}   (ticket ${BBB_TICKET})"
+  echo "Timestamp: ${TS}"
+  echo
+  echo "Region note:"
+  echo "  - Create managed disks in the SAME region as the storage account (${STORAGE_RESOURCE_GROUP}/${STORAGE_ACCOUNT})."
+  echo
+  echo "Detected from archive:"
+  echo "  VM size: ${VM_SIZE:-<choose-size>}"
+  echo "  OS type: ${OS_TYPE}"
+  echo
+  echo "Prereqs (one-time in your terminal):"
+  echo "  az login"
+  echo "  az account set --subscription ${STORAGE_SUBSCRIPTION_ID}"
+  echo
+  echo "Generate a short-lived SAS (12h) for each VHD as you go; example function:"
+  echo "END=\$(python3 - <<'PY'; import datetime; print((datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=12)).strftime('%Y-%m-%dT%H:%MZ')); PY)"
+  echo "sas() { az storage blob generate-sas --account-name ${STORAGE_ACCOUNT} --container-name ${PAGE_CONT} --name \"\$1\" --permissions r --expiry \"\$END\" --auth-mode login -o tsv; }"
+  echo
+  echo "A) Create OS disk from the archived VHD"
+  echo "   OS VHD:"
+  echo "     ${PAGE_BASE}/${OS_VHD_PATH}"
+  echo "   Commands:"
+  echo "     OS_SAS=\$(sas \"${OS_VHD_PATH}\")"
+  echo "     OS_DISK_ID=\$(az disk create -g ${VM_RESOURCE_GROUP} -n restored-osdisk-${VM}-${TS} \\"
+  echo "        --source \"${PAGE_BASE}/${OS_VHD_PATH}?\${OS_SAS}\" --query id -o tsv)"
+  echo
+  echo "B) Create the VM from that OS disk"
+  echo "   az vm create -g ${VM_RESOURCE_GROUP} -n restored-${VM}-${TS} \\"
+  echo "       --attach-os-disk \"\${OS_DISK_ID}\" --os-type ${OS_TYPE} --size ${VM_SIZE:-<choose-size>}"
+  echo
+  if ((${#DATA_VHD_PATHS[@]})); then
+    echo "C) Create data disks and attach with original LUNs"
+    for i in "${!DATA_VHD_PATHS[@]}"; do
+      dp="${DATA_VHD_PATHS[$i]}"
+      lun="${DATA_LUNS[$i]}"
+      short="${DATA_SHORTS[$i]}"
+      echo "   # Data disk (LUN ${lun})"
+      echo "   DD${i}_SAS=\$(sas \"${dp}\")"
+      echo "   DD${i}_ID=\$(az disk create -g ${VM_RESOURCE_GROUP} -n restored-data-${VM}-${short}-${TS} \\"
+      echo "       --source \"${PAGE_BASE}/${dp}?\${DD${i}_SAS}\" --query id -o tsv)"
+      echo "   az vm disk attach -g ${VM_RESOURCE_GROUP} --vm-name restored-${VM}-${TS} --disk \"\${DD${i}_ID}\" --lun ${lun}"
+      echo
+    done
+  else
+    echo "C) No data disks detected for this VM."
+    echo
+  fi
+  echo "D) Networking"
+  echo "   - Recreate/attach NIC(s) as needed (see ${PAGE_BASE}/${VM}/${TS}/_meta/ip.json and nics.txt)."
+  echo "   - Apply any tags or diagnostics from _meta/vm.json."
+  echo
+  if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
+    echo "E) If using Cold Archive copies instead of page blobs"
+    echo "   For each VHD below, rehydrate the block blob in the cold container, copy into a page blob, then proceed with steps A–C."
+    echo
+    echo "   Cold blobs (Archive tier):"
+    echo "   OS:   ${COLD_BASE}/${OS_VHD_PATH}"
+    for dp in "${DATA_VHD_PATHS[@]}"; do
+      echo "   DATA: ${COLD_BASE}/${dp}"
+    done
+    echo
+    echo "   Example rehydrate+convert for OS VHD:"
+    echo "     # 1) Rehydrate to Cool"
+    echo "     az storage blob set-tier --account-name ${STORAGE_ACCOUNT} -c ${COLD_CONT} -n \"${OS_VHD_PATH}\" --tier Cool --rehydrate-priority High --auth-mode login"
+    echo "     # Wait until archiveStatus clears"
+    echo "     # 2) Create empty page blob in ${PAGE_CONT} with same size"
+    echo "     SIZE=\$(az storage blob show --account-name ${STORAGE_ACCOUNT} -c ${COLD_CONT} -n \"${OS_VHD_PATH}\" --auth-mode login --query properties.contentLength -o tsv)"
+    echo "     az storage blob create --account-name ${STORAGE_ACCOUNT} -c ${PAGE_CONT} -n \"${OS_VHD_PATH}\" --type page --content-length \"\$SIZE\" --auth-mode login"
+    echo "     # 3) Server-side copy into the page blob"
+    echo "     COLD_SAS=\$(az storage blob generate-sas --account-name ${STORAGE_ACCOUNT} -c ${COLD_CONT} -n \"${OS_VHD_PATH}\" --permissions r --expiry \"\$END\" --auth-mode login -o tsv)"
+    echo "     az storage blob copy start --account-name ${STORAGE_ACCOUNT} --destination-container ${PAGE_CONT} --destination-blob \"${OS_VHD_PATH}\" \\"
+    echo "        --source-uri \"${COLD_BASE}/${OS_VHD_PATH}?\${COLD_SAS}\" --auth-mode login"
+    echo "     # Then continue with step A using ${PAGE_BASE}/${OS_VHD_PATH}"
+    echo
+  fi
+  echo "Verification tips:"
+  echo "  - VHD page blob should report blobType=PageBlob and a non-zero size."
+  echo "  - Managed disks should show provisioningState=Succeeded before creating the VM."
+  echo
+  echo "Cleanup (snapshots were tagged bbb-ticket=${BBB_TICKET}):"
+  echo "  az snapshot list --query \"[?tags.'bbb-ticket'=='${BBB_TICKET}'].id\" -o tsv | xargs -n1 az snapshot delete --ids"
+} > "${TMPDIR}/restore_steps.txt"
+
+# Upload (or DRY-RUN print) the file
+switch_sub "$STORAGE_SUBSCRIPTION_ID"
+upload_file "${TMPDIR}/restore_steps.txt" "${DEST_PREFIX}/_meta/restore_steps.txt" "${DEST_SAS:-}" "$DEST_BASE"
   echo "[5/9] Snapshots ..."
   switch_sub "$VM_SUBSCRIPTION_ID"
   SNAP_IDS=()
+  SNAP_DISK_SHORT_NAMES=()   # NEW: keeps the basename for each snapshot
   for DID in $DISK_IDS; do
     DNAME="$(basename "$DID")"
-    SNAME="${VM}-${DNAME}-${TS}"
+    SNAME="$(safe_snap_name "$VM" "$DNAME" "$TS" "$DID")"
     echo "   -> $SNAME"
     SID="$(create_snapshot_with_retry "$DID" "$SNAME" "$VM_RESOURCE_GROUP")"
     if [[ -n "${SID:-}" ]]; then
       SNAP_IDS+=("$SID")
+      SNAP_DISK_SHORT_NAMES+=("$DNAME")
     else
       echo "ERROR: Snapshot not created for $SNAME"
     fi
@@ -315,33 +466,37 @@ RST
   [[ ${#SNAP_IDS[@]} -gt 0 ]] || { echo "FATAL: no snapshots created; aborting."; exit 1; }
 
   if [[ "${DRY_RUN,,}" == "true" ]]; then
-    echo "[6/9] DRY RUN: skipping VHD copy. Would have copied:"
-    for SID in "${SNAP_IDS[@]}"; do
-      SNAME="$(az snapshot show --ids "$SID" --query name -o tsv)"
-      ORIG_DNAME="${SNAME#"${VM}-"}"; ORIG_DNAME="${ORIG_DNAME%"-${TS}"}"
-      echo "      ${DEST_BASE}/${VM}/${TS}/${ORIG_DNAME}.vhd"
+  echo "[6/9] DRY RUN: skipping VHD copy. Would have copied:"
+    for i in "${!SNAP_IDS[@]}"; do
+    SHORT="${SNAP_DISK_SHORT_NAMES[$i]}"
+    DEST_VHD_NAME="${SHORT}.vhd"
+    echo "      ${DEST_BASE}/${DEST_PREFIX}/${DEST_VHD_NAME}"
     done
     echo "[7/9] DRY RUN: skipping cold-archive copies."
   else
     echo "[6/9] Copy snapshots to VHD page blobs ..."
+   echo "[6/9] Copy snapshots to VHD page blobs ..."
     COPIED_VHDS=()
-    for SID in "${SNAP_IDS[@]}"; do
-      SNAME="$(az snapshot show --ids "$SID" --query name -o tsv)"
-      ORIG_DNAME="${SNAME#"${VM}-"}"; ORIG_DNAME="${ORIG_DNAME%"-${TS}"}"
-      DEST_VHD_NAME="${ORIG_DNAME}.vhd"
-      DEST_PATH="${DEST_PREFIX}/${DEST_VHD_NAME}"
-      SRC_SAS_URL="$(az snapshot grant-access --ids "$SID" --duration-in-seconds $(( SRC_SAS_HOURS*3600 )) --access-level Read --query accessSAS -o tsv)"
+    for i in "${!SNAP_IDS[@]}"; do
+    SID="${SNAP_IDS[$i]}"
+    SHORT="${SNAP_DISK_SHORT_NAMES[$i]}"
+    DEST_VHD_NAME="${SHORT}.vhd"
+    DEST_PATH="${DEST_PREFIX}/${DEST_VHD_NAME}"
 
-      switch_sub "$STORAGE_SUBSCRIPTION_ID"
-      echo "   -> Copy $DEST_VHD_NAME"
-      azcopy copy "$SRC_SAS_URL" "${DEST_BASE}/${DEST_PATH}?${DEST_SAS}" --overwrite=true
+    SRC_SAS_URL="$(az snapshot grant-access --ids "$SID" \
+                    --duration-in-seconds $(( SRC_SAS_HOURS*3600 )) \
+                    --access-level Read --query accessSAS -o tsv)"
 
-      PROPS="$(show_blob "${DEST_PATH}" "$CONTAINER")"
-      echo "      ${PROPS}"
-      BYTES="$(az storage blob show --account-name "$STORAGE_ACCOUNT" --container-name "$CONTAINER" \
-               --name "${DEST_PATH}" --auth-mode login --query "properties.contentLength" -o tsv)"
-      TOTAL_PAGE_BYTES=$((TOTAL_PAGE_BYTES + BYTES))
-      COPIED_VHDS+=("${DEST_PATH}")
+    switch_sub "$STORAGE_SUBSCRIPTION_ID"
+    echo "   -> Copy $DEST_VHD_NAME"
+    azcopy copy "$SRC_SAS_URL" "${DEST_BASE}/${DEST_PATH}?${DEST_SAS}" --overwrite=true
+
+    PROPS="$(show_blob "${DEST_PATH}" "$CONTAINER")"
+    echo "      ${PROPS}"
+    BYTES="$(az storage blob show --account-name "$STORAGE_ACCOUNT" --container-name "$CONTAINER" \
+            --name "${DEST_PATH}" --auth-mode login --query "properties.contentLength" -o tsv)"
+    TOTAL_PAGE_BYTES=$((TOTAL_PAGE_BYTES + BYTES))
+    COPIED_VHDS+=("${DEST_PATH}")
     done
 
     if [[ "${ENABLE_COLD_ARCHIVE,,}" == "true" ]]; then
