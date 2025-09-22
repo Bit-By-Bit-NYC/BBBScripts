@@ -1,0 +1,392 @@
+Starting log (Run on device)
+FG100E-ZGBC $ show system dhcp server
+config system dhcp server
+edit 1
+set lease-time 86400
+set default-gateway 172.16.14.1
+set netmask 255.255.255.0
+set interface "VOICE"
+config ip-range
+edit 1
+set start-ip 172.16.14.10
+set end-ip 172.16.14.199
+next
+end
+set timezone-option default
+set tftp-server "10.64.192.21"
+config reserved-address
+edit 1
+set ip 172.16.14.21
+set mac 70:18:a7:bc:05:98
+next
+edit 2
+set ip 172.16.14.18
+set mac 2c:01:b5:e6:55:d1
+next
+edit 3
+set ip 172.16.14.39
+set mac 80:30:e0:81:8a:a0
+next
+edit 4
+set ip 172.16.14.52
+set mac 70:18:a7:bd:03:7a
+set description "SEP7018A7BD037A"
+next
+end
+set dns-server1 1.1.1.1
+set dns-server2 8.8.8.8
+next
+edit 2
+set lease-time 86400
+set default-gateway 192.168.1.1
+set netmask 255.255.255.0
+set interface "lan"
+config ip-range
+edit 1
+set start-ip 192.168.1.100
+set end-ip 192.168.1.254
+next
+end
+config reserved-address
+edit 1
+set ip 192.168.1.104
+set mac e8:d8:d1:bb:e2:c1
+set description "ZGBC44-WDARLIN"
+next
+edit 2
+set ip 192.168.1.107
+set mac 10:e7:c6:ae:a6:e5
+set description "zgbc-fax"
+next
+edit 3
+set ip 192.168.1.117
+set mac 48:0f:cf:4d:e4:d8
+set description "zgbc06-jzukerman"
+next
+edit 4
+set ip 192.168.1.123
+set mac c8:d3:ff:a3:56:c1
+set description "zgbc30-fcraig"
+next
+edit 5
+set ip 192.168.1.124
+set mac d0:67:e5:21:0b:c9
+set description "ZGBC20-KTAYLOR"
+next
+edit 6
+set ip 192.168.1.126
+set mac 40:b0:34:ff:61:cb
+set description "ZGBC25-VNARRAINEN"
+next
+edit 7
+set ip 192.168.1.127
+set mac f4:39:09:19:ff:3e
+set description "ZGBC19-SANGELSON"
+next
+edit 8
+set ip 192.168.1.129
+set mac 00:50:56:89:33:f0
+set description "ZGBCSQL02"
+next
+edit 9
+set ip 192.168.1.132
+set mac f4:39:09:19:ff:29
+set description "ZGBC01-MSHRUTKOWSKI"
+next
+edit 10
+set ip 192.168.1.134
+set mac d0:67:e5:21:16:13
+set description "ZGBC42-CKUNZ"
+next
+edit 11
+set ip 192.168.1.140
+set mac 48:0f:cf:5e:4c:12
+set description "zgbc05-cbrandeis"
+next
+edit 12
+set ip 192.168.1.141
+set mac d0:67:e5:21:15:5c
+set description "ZGBC-REMOTE02"
+next
+edit 13
+set ip 192.168.1.142
+set mac dc:4a:3e:66:90:5d
+set description "ZGBC00-ITROOMPC"
+next
+edit 14
+set ip 192.168.1.150
+set mac 98:90:96:e3:48:61
+set description "ZGBC38-JCROSSMAN"
+next
+edit 15
+set ip 192.168.1.152
+set mac 40:b0:34:ff:61:c5
+set description "ZGBC14-ADALE"
+next
+edit 16
+set ip 192.168.1.154
+set mac f8:b1:56:b5:be:08
+set description "zgbc15-bsmith"
+next
+edit 17
+set ip 192.168.1.156
+set mac d0:67:e5:21:15:2e
+set description "ZGBC17-MSabloff"
+next
+edit 18
+set ip 192.168.1.166
+set mac f8:b1:56:b7:68:13
+set description "zgbc08-ltudor1"
+next
+edit 19
+set ip 192.168.1.171
+set mac d0:67:e5:21:07:b4
+set description "zgbc39-eleary"
+next
+edit 20
+set ip 192.168.1.172
+set mac 48:0f:cf:47:2c:1e
+set description "zgbc32-fwelzer"
+next
+edit 21
+set ip 192.168.1.173
+set mac 48:0f:cf:5e:4b:f9
+set description "zgbc04-ngore"
+next
+edit 22
+set ip 192.168.1.175
+set mac 10:e7:c6:ae:ab:22
+set description "ZGBC40-BNATAL"
+next
+edit 23
+set ip 192.168.1.182
+set mac 40:b0:34:f4:de:56
+set description "zgbc43-mtanguy"
+next
+edit 24
+set ip 192.168.1.186
+set mac dc:4a:3e:66:90:3d
+set description "zgbc09-Reception"
+next
+edit 25
+set ip 192.168.1.187
+set mac 94:57:a5:f3:dc:99
+set description "zgbc07-csparkes"
+next
+edit 26
+set ip 192.168.1.190
+set mac 94:57:a5:f1:b5:40
+set description "zgbc12-jruiz"
+next
+edit 27
+set ip 192.168.1.191
+set mac 9c:7b:ef:b2:c8:e5
+set description "ZGBC22-JMALONEY"
+next
+edit 28
+set ip 192.168.1.197
+set mac 9c:7b:ef:b2:c7:4b
+set description "ZGBC16-EWINTERS"
+next
+edit 29
+set ip 192.168.1.199
+set mac 40:b0:34:f4:df:2f
+set description "zgbc29-wmaldana"
+next
+edit 30
+set ip 192.168.1.200
+set mac f4:39:09:19:eb:36
+set description "ZGBC03-VMURTHY"
+next
+edit 31
+set ip 192.168.1.203
+set mac f4:39:09:19:ff:0b
+set description "ZGBC02-MGERENA"
+next
+edit 32
+set ip 192.168.1.208
+set mac d0:67:e5:21:11:d0
+set description "ZGBC11-DFRITZ"
+next
+edit 33
+set ip 192.168.1.214
+set mac 9c:7b:ef:b2:c4:0d
+set description "ZGBC21-EPOWERS"
+next
+edit 34
+set ip 192.168.1.220
+set mac 9c:7b:ef:b2:c8:e8
+set description "ZGBC18-TPORETZ"
+next
+edit 35
+set ip 192.168.1.118
+set mac 68:3a:1e:2d:fc:1f
+next
+edit 36
+set ip 192.168.1.125
+set mac e4:55:a8:01:25:f2
+next
+edit 37
+set ip 192.168.1.105
+set mac 68:3a:1e:2e:3a:b5
+next
+edit 38
+set ip 192.168.1.119
+set mac 68:3a:1e:2e:88:f9
+next
+edit 39
+set ip 192.168.1.174
+set mac 24:fb:e3:f9:2b:6a
+next
+edit 40
+set ip 192.168.1.128
+set mac 00:50:56:b7:80:59
+next
+edit 41
+set ip 192.168.1.139
+set mac d0:50:99:f0:4c:2a
+next
+edit 42
+set ip 192.168.1.131
+set mac e8:cf:83:2e:1e:09
+next
+edit 43
+set ip 192.168.1.168
+set mac 00:50:56:b7:ec:66
+next
+end
+set dns-server1 192.168.1.42
+set dns-server2 192.168.1.44
+next
+end
+FG100E-ZGBC $
+FG100E-ZGBC $ exec dhcp lease-list
+VOICE
+IP MAC-Address Hostname VCI SSID AP SERVER-ID Expiry
+172.16.14.40 70:18:a7:17:87:3c SEP7018A717873C Cisco Systems, Inc. IP Phone CP-8851 1 Mon Sep 22 23:58:44 2025
+172.16.14.36 00:2f:5c:4f:57:f8 SEP002F5C4F57F8 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 00:12:34 2025
+172.16.14.43 70:18:a7:bc:2a:3e SEP7018A7BC2A3E Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 00:34:05 2025
+172.16.14.45 c4:4d:84:2b:2c:c6 SEPC44D842B2CC6 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 00:54:13 2025
+172.16.14.54 70:18:a7:17:21:86 SEP7018A7172186 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 01:17:46 2025
+172.16.14.34 40:06:d5:f1:a2:f2 SEP4006D5F1A2F2 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 01:28:08 2025
+172.16.14.15 a4:b2:39:b7:09:e0 SEPA4B239B709E0 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 01:34:33 2025
+172.16.14.27 70:18:a7:bd:96:6e SEP7018A7BD966E Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 01:39:05 2025
+172.16.14.28 00:77:8d:ad:b4:86 SEP00778DADB486 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 01:46:52 2025
+172.16.14.53 40:06:d5:f1:a4:be SEP4006D5F1A4BE Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 02:32:24 2025
+172.16.14.46 70:18:a7:bd:9c:ea SEP7018A7BD9CEA Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 02:33:08 2025
+172.16.14.58 88:ae:dd:71:35:85 DESKTOP-C7FPB29 MSFT 5.0 1 Tue Sep 23 02:33:14 2025
+172.16.14.26 70:c9:c6:4a:16:e8 SEP70C9C64A16E8 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 02:39:16 2025
+172.16.14.55 44:b6:be:b4:e8:22 SEP44B6BEB4E822 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 02:51:11 2025
+172.16.14.25 70:18:a7:bd:05:60 SEP7018A7BD0560 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 03:47:15 2025
+172.16.14.38 70:18:a7:bc:d0:da SEP7018A7BCD0DA Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 03:53:02 2025
+172.16.14.51 c4:b3:6a:34:11:4e SEPC4B36A34114E Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 03:53:32 2025
+172.16.14.10 80:30:e0:81:aa:e0 Aruba JL261A 2930F-24G-PoE+-4SFP Switch dslforum.org 1 Tue Sep 23 03:57:25 2025
+172.16.14.20 70:0b:4f:7a:f8:9a SEP700B4F7AF89A Cisco Systems, Inc. IP Phone CP-8832 1 Tue Sep 23 04:00:47 2025
+172.16.14.19 80:30:e0:81:ca:20 Aruba JL261A 2930F-24G-PoE+-4SFP Switch dslforum.org 1 Tue Sep 23 04:07:50 2025
+172.16.14.13 70:18:a7:bd:c6:26 SEP7018A7BDC626 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 04:09:31 2025
+172.16.14.16 00:2f:5c:4f:71:ca SEP002F5C4F71CA Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 04:17:51 2025
+172.16.14.48 70:18:a7:bd:a0:90 SEP7018A7BDA090 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 04:27:17 2025
+172.16.14.12 70:18:a7:17:42:66 SEP7018A7174266 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 04:42:21 2025
+172.16.14.29 28:29:86:2e:1f:7e apc2E1F7E APC 1 Tue Sep 23 04:53:30 2025
+172.16.14.11 70:18:a7:bd:c2:62 SEP7018A7BDC262 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 05:03:57 2025
+172.16.14.57 cc:36:cf:cc:2c:8e SEPCC36CFCC2C8E Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 05:26:47 2025
+172.16.14.47 40:06:d5:f1:9f:aa SEP4006D5F19FAA Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 06:24:20 2025
+172.16.14.35 70:c9:c6:c2:b8:2c SEP70C9C6C2B82C Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 06:32:19 2025
+172.16.14.50 00:22:ee:0c:03:7c ZBGCsipintercom Algo 8201 SIP PoE Intercom 1 Tue Sep 23 06:33:19 2025
+172.16.14.33 d4:eb:68:5b:f9:8e SEPD4EB685BF98E Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 07:22:55 2025
+172.16.14.31 00:2f:5c:4f:59:b8 SEP002F5C4F59B8 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 07:56:33 2025
+172.16.14.23 a4:b2:39:b7:39:e8 SEPA4B239B739E8 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 08:26:52 2025
+172.16.14.42 70:18:a7:bd:cd:be SEP7018A7BDCDBE Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 08:58:45 2025
+172.16.14.17 70:18:a7:17:42:6e SEP7018A717426E Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 09:43:26 2025
+172.16.14.49 70:18:a7:bd:94:a6 SEP7018A7BD94A6 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 10:18:05 2025
+172.16.14.30 70:c9:c6:4a:e1:a0 SEP70C9C64AE1A0 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 10:27:26 2025
+172.16.14.41 70:18:a7:17:2e:1e SEP7018A7172E1E Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 10:33:29 2025
+172.16.14.32 00:2f:5c:4f:57:fa SEP002F5C4F57FA Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 10:42:14 2025
+172.16.14.44 70:18:a7:17:3e:78 SEP7018A7173E78 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 10:52:26 2025
+172.16.14.56 00:2f:5c:4e:99:56 SEP002F5C4E9956 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 11:18:39 2025
+172.16.14.24 70:18:a7:bd:c2:70 SEP7018A7BDC270 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 11:34:20 2025
+172.16.14.37 70:18:a7:17:3d:78 SEP7018A7173D78 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 11:38:57 2025
+172.16.14.22 70:18:a7:bd:d7:38 SEP7018A7BDD738 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 11:42:49 2025
+172.16.14.52 70:18:a7:bd:03:7a SEP7018A7BD037A Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 04:19:55 2025
+172.16.14.39 80:30:e0:81:8a:a0 Aruba JL261A 2930F-24G-PoE+-4SFP Switch dslforum.org 1 Tue Sep 23 04:12:23 2025
+172.16.14.18 2c:01:b5:e6:55:d1 SEP2C01B5E655D1 Cisco Systems, Inc. IP Phone CP-8832 1 Tue Sep 23 10:36:03 2025
+172.16.14.21 70:18:a7:bc:05:98 SEP7018A7BC0598 Cisco Systems, Inc. IP Phone CP-8851 1 Tue Sep 23 09:51:41 2025
+lan
+IP MAC-Address Hostname VCI SSID AP SERVER-ID Expiry
+192.168.1.226 c6:67:46:ac:8f:fe 2 Mon Sep 22 17:48:41 2025
+192.168.1.228 5c:60:ba:e0:a1:9c ZGBC-LAPTOP35 MSFT 5.0 2 Mon Sep 22 17:53:38 2025
+192.168.1.230 5c:60:ba:d2:ed:c9 ZGBC-LAPTOP35 MSFT 5.0 2 Mon Sep 22 18:00:11 2025
+192.168.1.227 14:d4:24:22:79:f0 ZGBC-LAPTOP35 MSFT 5.0 2 Mon Sep 22 20:00:57 2025
+192.168.1.135 d0:50:99:f0:4c:29 udhcp 1.21.1 2 Tue Sep 23 00:26:34 2025
+192.168.1.196 28:29:86:11:a9:f6 apc11A9F6 APC 2 Tue Sep 23 00:35:42 2025
+192.168.1.158 ac:e2:d3:42:b5:8f NPI42B58F Hewlett-Packard JetDirect 2 Tue Sep 23 02:09:00 2025
+192.168.1.120 d0:03:4b:19:e1:b9 ATV-21 2 Tue Sep 23 02:35:16 2025
+192.168.1.193 04:0e:3c:65:3a:ca NPI653ACA Hewlett-Packard JetDirect 2 Tue Sep 23 02:54:11 2025
+192.168.1.169 38:94:ed:46:53:f3 RBR750 udhcp 0.9.8 2 Tue Sep 23 03:10:59 2025
+192.168.1.202 48:ea:62:ee:73:c8 ZGBC-PC-95 MSFT 5.0 2 Tue Sep 23 05:23:23 2025
+192.168.1.151 9c:7b:ef:4e:02:05 ZGBC28-MWEI MSFT 5.0 2 Tue Sep 23 05:31:10 2025
+192.168.1.194 28:11:a8:40:0a:79 ZGBC-LAPTOP29 MSFT 5.0 2 Tue Sep 23 05:41:04 2025
+192.168.1.137 a0:8c:fd:64:28:af Printer4 Hewlett-Packard JetDirect 2 Tue Sep 23 06:27:19 2025
+192.168.1.184 38:ca:84:a6:ba:ee NPIA6BAEE Hewlett-Packard JetDirect 2 Tue Sep 23 07:16:33 2025
+192.168.1.101 ea:42:d0:6e:fc:ef iPhone 2 Tue Sep 23 07:21:51 2025
+192.168.1.162 00:90:8f:b6:e0:8d mp202 MP202 2 Tue Sep 23 07:36:44 2025
+192.168.1.100 22:63:31:5c:ff:c9 iPhone 2 Tue Sep 23 07:39:58 2025
+192.168.1.147 18:60:24:ca:85:0e NPICA850E Hewlett-Packard JetDirect 2 Tue Sep 23 07:48:13 2025
+192.168.1.204 40:b9:3c:07:15:7c HPE HPE. HPE 1920-48G Switch 2 Tue Sep 23 08:06:09 2025
+192.168.1.181 38:ca:84:c0:c8:1f ZGBC-PC-94 MSFT 5.0 2 Tue Sep 23 08:07:19 2025
+192.168.1.102 7c:57:58:0e:ee:9d ZGBC-PC-90 MSFT 5.0 2 Tue Sep 23 08:12:30 2025
+192.168.1.103 3e:d2:81:ac:0a:ab iPhone 2 Tue Sep 23 08:38:45 2025
+192.168.1.144 7c:57:58:0e:ed:9b ZGBC-PC-72 MSFT 5.0 2 Tue Sep 23 08:39:58 2025
+192.168.1.189 b0:22:7a:1e:d3:eb ZGBC24-CKOSEK MSFT 5.0 2 Tue Sep 23 08:58:52 2025
+192.168.1.185 70:1a:b8:c8:56:86 ZGBC-PC-65 MSFT 5.0 2 Tue Sep 23 09:05:16 2025
+192.168.1.160 c8:5a:cf:a7:45:63 ZGBC-PC-65 MSFT 5.0 2 Tue Sep 23 09:05:25 2025
+192.168.1.110 46:a4:85:e8:e1:57 iPhone 2 Tue Sep 23 09:09:50 2025
+192.168.1.111 96:f0:f9:48:3b:a7 iPad 2 Tue Sep 23 09:11:19 2025
+192.168.1.106 5c:60:ba:d8:81:9d ZGBC-PC-70 MSFT 5.0 2 Tue Sep 23 09:13:34 2025
+192.168.1.113 16:be:ca:1b:3b:ef iPhone 2 Tue Sep 23 09:13:50 2025
+192.168.1.149 9c:7b:ef:4e:35:5b ZGBC27-CBRANDEIS MSFT 5.0 2 Tue Sep 23 09:15:56 2025
+192.168.1.177 e0:70:ea:a4:2f:00 ZGBC-PC-64 MSFT 5.0 2 Tue Sep 23 09:22:54 2025
+192.168.1.114 1a:58:60:f8:3f:c5 MYLINH-s-S24-Ultra android-dhcp-15 2 Tue Sep 23 09:25:45 2025
+192.168.1.215 7c:57:58:0e:ed:3c ZGBC-PC-85 MSFT 5.0 2 Tue Sep 23 09:26:55 2025
+192.168.1.198 60:45:2e:62:10:2e ZGBC-PC-80 MSFT 5.0 2 Tue Sep 23 09:28:02 2025
+192.168.1.115 8a:38:14:bc:2b:4c iPhone 2 Tue Sep 23 09:35:26 2025
+192.168.1.223 5c:60:ba:d0:30:70 ZGBC-LAPTOP39 MSFT 5.0 2 Tue Sep 23 09:49:39 2025
+192.168.1.133 5c:60:ba:d9:0f:ef ZGBC-PC-69 MSFT 5.0 2 Tue Sep 23 10:33:28 2025
+192.168.1.116 0e:69:81:0e:88:93 iPhone 2 Tue Sep 23 10:34:45 2025
+192.168.1.146 58:6c:25:2c:36:6b ZGBC-LAPTOP025 MSFT 5.0 2 Tue Sep 23 10:50:11 2025
+192.168.1.109 52:48:5b:ca:7f:5b iPhone 2 Tue Sep 23 10:51:23 2025
+192.168.1.183 70:08:10:cc:72:cf ZGBC-PC-96 MSFT 5.0 2 Tue Sep 23 11:18:21 2025
+192.168.1.188 94:57:a5:17:04:3d NPI17043D HP LaserJet 2 Tue Sep 23 11:36:25 2025
+192.168.1.165 c8:5a:cf:9f:fa:63 ZGBC-PC-66 MSFT 5.0 2 Tue Sep 23 11:45:42 2025
+192.168.1.218 38:ca:84:b8:ea:c0 ZGBC-PC-71 MSFT 5.0 2 Tue Sep 23 11:45:44 2025
+192.168.1.211 7c:57:58:1f:c7:8f ZGBC-PC-73 MSFT 5.0 2 Tue Sep 23 11:45:45 2025
+192.168.1.161 9c:7b:ef:4e:1c:a2 ZGBC48-KPARK MSFT 5.0 2 Tue Sep 23 11:45:46 2025
+192.168.1.207 5c:60:ba:c8:ae:8e ZGBC-PC-68 MSFT 5.0 2 Tue Sep 23 11:45:47 2025
+192.168.1.216 50:81:40:72:a5:af ZGBC-REMOTE02 MSFT 5.0 2 Tue Sep 23 11:45:48 2025
+192.168.1.176 50:81:40:9d:e2:d4 ZGBC57-BSMITH MSFT 5.0 2 Tue Sep 23 11:45:49 2025
+192.168.1.209 c8:5a:cf:a1:0b:0b ZGBC-PC-67 MSFT 5.0 2 Tue Sep 23 11:45:50 2025
+192.168.1.179 e0:be:03:2a:98:48 ZGBC55-FWELZER MSFT 5.0 2 Tue Sep 23 11:46:01 2025
+192.168.1.163 9c:7b:ef:4e:03:22 ZGBC31-JZUKERMAN MSFT 5.0 2 Tue Sep 23 11:46:08 2025
+192.168.1.192 e0:be:03:2a:9a:c8 ZGBC50-SANGELSON MSFT 5.0 2 Tue Sep 23 11:46:12 2025
+192.168.1.112 e8:a7:2f:5d:8c:1c CJD-Laptop MSFT 5.0 2 Tue Sep 23 11:46:22 2025
+192.168.1.155 e8:d8:d1:d2:e0:c4 ZGBC13-MTANGUY MSFT 5.0 2 Tue Sep 23 11:51:24 2025
+192.168.1.210 e8:d8:d1:d2:61:40 ITRoomPC2023 MSFT 5.0 2 Tue Sep 23 11:51:35 2025
+192.168.1.108 e6:a4:16:1e:5e:8e iPhone 2 Tue Sep 23 13:36:27 2025
+192.168.1.168 00:50:56:b7:ec:66 ZGBCQB MSFT 5.0 2 Tue Sep 23 04:12:24 2025
+192.168.1.131 e8:cf:83:2e:1e:09 ZGBC-DATTO-S512 2 Tue Sep 23 00:26:54 2025
+192.168.1.139 d0:50:99:f0:4c:2a ZGBC-DATTO-S4XP8 2 Tue Sep 23 06:35:50 2025
+192.168.1.128 00:50:56:b7:80:59 ZGBCTESTING MSFT 5.0 2 Tue Sep 23 07:51:53 2025
+192.168.1.174 24:fb:e3:f9:2b:6a NPIF92B6A Hewlett-Packard JetDirect 2 Tue Sep 23 09:14:35 2025
+192.168.1.119 68:3a:1e:2e:88:f9 southwest-ap-683a1e2e88f9MERAKI 2 Tue Sep 23 04:13:38 2025
+192.168.1.105 68:3a:1e:2e:3a:b5 south-ap-683a1e2e3ab5MERAKI 2 Tue Sep 23 05:51:49 2025
+192.168.1.125 e4:55:a8:01:25:f2 northwest-ap-e455a80125f2MERAKI 2 Tue Sep 23 07:26:08 2025
+192.168.1.118 68:3a:1e:2d:fc:1f north-ap-683a1e2dfc1fMERAKI 2 Tue Sep 23 10:38:43 2025
+192.168.1.214 9c:7b:ef:b2:c4:0d ZGBC30-DFARBMAN MSFT 5.0 2 Tue Sep 23 11:45:49 2025
+192.168.1.208 d0:67:e5:21:11:d0 ZGBC11-DFRITZ MSFT 5.0 2 Tue Sep 23 11:46:14 2025
+192.168.1.200 f4:39:09:19:eb:36 ZGBC03-VMURTHY MSFT 5.0 2 Tue Sep 23 11:46:22 2025
+192.168.1.190 94:57:a5:f1:b5:40 zgbc12-jruiz MSFT 5.0 2 Tue Sep 23 11:46:11 2025
+192.168.1.166 f8:b1:56:b7:68:13 zgbc08-ltudor1 MSFT 5.0 2 Tue Sep 23 11:45:53 2025
+192.168.1.127 f4:39:09:19:ff:3e ZGBC59-JFRIESEN MSFT 5.0 2 Tue Sep 23 11:46:13 2025
+192.168.1.123 c8:d3:ff:a3:56:c1 ZGBC58-CKUNZ MSFT 5.0 2 Tue Sep 23 11:49:39 2025
+FG100E-ZGBC $
+FG100E-ZGBC $
