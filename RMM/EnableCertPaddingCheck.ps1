@@ -12,7 +12,7 @@ foreach ($path in $paths) {
     }
 
     # Set the EnableCertPaddingCheck value to 1
-    Set-ItemProperty -Path $path -Name "EnableCertPaddingCheck" -Value 1 -PropertyType DWORD -Force
+    New-ItemProperty -Path $path -Name "EnableCertPaddingCheck" -Value 1 -PropertyType DWORD -Force
 }
 
 # Output success message
