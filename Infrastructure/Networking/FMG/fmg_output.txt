@@ -1,0 +1,222 @@
+-------Executing time: Tue Sep 23 09:28:05 2025-----------
+
+Starting log (Run on device)
+fgt-600e-drt2 config global
+fgt-600e-drt2 (global) show system switch-interface
+config system switch-interface
+edit "int.management"
+set vdom "management"
+set member "x2" "port1" "port2" "port4"
+next
+edit "int.dhca-cook"
+set vdom "dhca_cook"
+set member "port7"
+next
+edit "sw-uplink-ge"
+set vdom "root"
+set member "port5"
+next
+end
+fgt-600e-drt2 (global) get system interface physical
+== [onboard]
+==[ha]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: up
+speed: 1000Mbps (Duplex: full)
+FEC: none
+FEC_cap: none
+==[mgmt]
+mode: static
+ip: 192.168.2.99 255.255.255.0
+ipv6: ::/0
+status: up
+speed: 1000Mbps (Duplex: full)
+FEC: none
+FEC_cap: none
+==[npu0_vlink0]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: up
+speed: n/a (Duplex: n/a)
+FEC: none
+FEC_cap: none
+==[npu0_vlink1]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: up
+speed: n/a (Duplex: n/a)
+FEC: none
+FEC_cap: none
+==[port1]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[port2]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[port3]
+mode: static
+ip: 64.125.35.97 255.255.255.254
+ipv6: ::/0
+status: up
+speed: 1000Mbps (Duplex: full)
+FEC: none
+FEC_cap: none
+==[port4]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[port5]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: up
+speed: 1000Mbps (Duplex: full)
+FEC: none
+FEC_cap: none
+==[port6]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[port7]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: up
+speed: 1000Mbps (Duplex: full)
+FEC: none
+FEC_cap: none
+==[port8]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: up
+speed: 1000Mbps (Duplex: full)
+FEC: none
+FEC_cap: none
+==[port9]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[port10]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[port11]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[port12]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[s1]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[s2]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[vw1]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[vw2]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+==[x1]
+mode: static
+ip: 38.122.116.10 255.255.255.248
+ipv6: ::/0
+status: up
+speed: 10000Mbps (Duplex: full)
+FEC: none
+FEC_cap: none
+==[x2]
+mode: static
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: up
+speed: 10000Mbps (Duplex: full)
+FEC: none
+FEC_cap: none
+==[modem]
+mode: pppoe
+ip: 0.0.0.0 0.0.0.0
+ipv6: ::/0
+status: down
+speed: n/a
+FEC: none
+FEC_cap: none
+fgt-600e-drt2 (global)
+----------------End of Log-------------------------
+
+-------Executing time: Tue Sep 23 09:26:11 2025-----------
+
+Starting log (Run on device)
+fgt-600e-drt2 show system switch-interface
+Command fail. Return code 5
+fgt-600e-drt2 get system interface physical
+command parse error before 'interface'
+Command fail. Return code -61
+fgt-600e-drt2
+----------------End of Log-------------------------
+
+
+
+Close
