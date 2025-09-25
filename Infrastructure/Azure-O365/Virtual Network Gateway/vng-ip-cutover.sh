@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Azure VNet Gateway Backup / Recreate / Restore with new Public IP(s)
-# Compatible with Azure CLI 2.76.0
+# Tested with Azure CLI 2.76.0
 
-# ---------- Config (config.txt is optional) ----------
-CONFIG_FILE="./config.txt"
-[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# -------- Config (config.txt optional) --------
+CONFIG_FILE="./config.txt"; [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 RG="${RG:-}"; GW="${GW:-}"; NEW_PIP="${NEW_PIP:-}"; NEW_PIP2="${NEW_PIP2:-}"
 
-# ---------- Helpers ----------
+# -------- Helpers --------
 timestamp(){ date +"%Y-%m-%d %H:%M:%S"; }
 log(){ echo "[$(timestamp)] $*"; }
 warn(){ echo "[$(timestamp)] WARNING: $*" >&2; }
 pretty_json(){ command -v jq >/dev/null 2>&1 && jq -r '.' || cat; }
+kb_to_bytes(){ local kb="${1:-0}"; echo $(( kb * 1024 )); }
 
 get_psk(){ # PSK via REST (works across CLI versions)
   local rg="$1" conn="$2" id
@@ -21,26 +21,75 @@ get_psk(){ # PSK via REST (works across CLI versions)
     --query value -o tsv 2>/dev/null
 }
 
+# Create Public IP of a given SKU (Basic|Standard)
 create_pip_if_missing(){
-  local pip="$1" loc="$2"
+  local pip="$1" loc="$2" sku="$3"
   if ! az network public-ip show -g "$RG" -n "$pip" >/dev/null 2>&1; then
-    log "Creating Public IP $pip (Standard/Static) ..."
-    az network public-ip create -g "$RG" -n "$pip" --sku Standard --allocation-method Static --location "$loc" >/dev/null || warn "Failed to create $pip"
+    log "Creating Public IP $pip ($sku/Static) ..."
+    az network public-ip create -g "$RG" -n "$pip" --sku "$sku" --allocation-method Static --location "$loc" >/dev/null || warn "Failed to create $pip"
   fi
   local ip; ip=$(az network public-ip show -g "$RG" -n "$pip" --query ipAddress -o tsv 2>/dev/null)
   log "  $pip => ${ip:-<allocating>}"
 }
 
-kb_to_bytes(){ # echo bytes for given kilobytes (int); 0 stays 0
-  local kb="${1:-0}"; echo $(( kb * 1024 ))
+# For a target gateway SKU, return proper Public IP SKU
+pip_sku_for_target(){
+  local tsku="$1"
+  if [[ "$tsku" == "Basic" ]]; then echo "Basic"; else echo "Standard"; fi
 }
 
-# ---------- Inputs ----------
+# Build list of valid backup folders (skip current)
+build_valid_backup_list(){
+  BKLIST=()
+  while IFS= read -r d; do
+    [ "$d" = "$BACKUP_DIR" ] && continue
+    [ -d "$d" ] || continue
+    [ -f "$d/gateway-summary.json" ] || continue
+    [ -d "$d/conn-json" ] || continue
+    BKLIST+=("$d")
+  done < <(ls -1d gw-backup-* 2>/dev/null | sort -r)
+}
+
+# Delete all connections that reference gateway ID; wait for zero
+delete_conns_for_gw(){
+  local rg="$1" gwid="$2"
+  log "Deleting connections that reference gateway: $gwid ..."
+  mapfile -t CONN1 < <(az network vpn-connection list -g "$rg" --query "[?virtualNetworkGateway1 && virtualNetworkGateway1.id=='${gwid}'].name" -o tsv)
+  mapfile -t CONN2 < <(az network vpn-connection list -g "$rg" --query "[?virtualNetworkGateway2 && virtualNetworkGateway2.id=='${gwid}'].name" -o tsv)
+  local all=($(printf "%s\n" "${CONN1[@]}" "${CONN2[@]}" | sort -u))
+  for C in "${all[@]}"; do
+    [ -z "$C" ] && continue
+    log "  - deleting vpn-connection $C"
+    az network vpn-connection delete -g "$rg" -n "$C" || warn "    - delete failed (continuing)"
+  done
+  for i in {1..40}; do
+    left=$(az network vpn-connection list -g "$rg" \
+      --query "[?virtualNetworkGateway1 && virtualNetworkGateway1.id=='${gwid}' || virtualNetworkGateway2 && virtualNetworkGateway2.id=='${gwid}'] | length(@)" -o tsv)
+    [ "$left" = "0" ] && break
+    sleep 6
+  done
+  log "All referencing connections deleted."
+}
+
+# Wait until gateway is gone
+wait_delete_gw(){
+  local rg="$1" name="$2"
+  log "Waiting for gateway $name to be deleted..."
+  for i in {1..60}; do
+    if ! az network vnet-gateway show -g "$rg" -n "$name" >/dev/null 2>&1; then
+      log "Gateway $name no longer present."; return 0
+    fi
+    sleep 10
+  done
+  warn "Timed out waiting for gateway delete (continuing)."
+}
+
+# -------- Inputs --------
 [ -z "$RG" ] && read -rp "Resource Group (RG): " RG
 [ -z "$GW" ] && read -rp "Gateway Name (GW): " GW
 az account show >/dev/null 2>&1 || { warn "Not logged in. Run: az login"; exit 1; }
 
-# ---------- Snapshot current gateway (if it exists) ----------
+# -------- Snapshot current gateway (if exists) --------
 BACKUP_DIR="gw-backup-$(date +%Y%m%d%H%M%S)"
 mkdir -p "$BACKUP_DIR/conn-json" "$BACKUP_DIR/psk"
 
@@ -59,7 +108,7 @@ if az network vnet-gateway show -g "$RG" -n "$GW" -o json > "$BACKUP_DIR/gateway
   fi
   GW_EXISTS=true
 else
-  warn "Gateway not found (may be deleted already). Restore mode will still work."
+  warn "Gateway not found (may be deleted already). Restore modes still work."
   GW_EXISTS=false
 fi
 
@@ -75,21 +124,25 @@ if [ "$GW_EXISTS" = true ]; then
   VNET_NAME=$(echo "$SUBNET_ID" | awk -F'/virtualNetworks/' '{print $2}' | awk -F'/subnets/' '{print $1}')
   ENABLE_BGP=false; [ -n "$ASN" ] && [ "$ASN" != "None" ] && ENABLE_BGP=true
 
-  # ---------- SKU guard (Basic → prompt to VpnGw1/1AZ) ----------
   TARGET_SKU="$SKU"
   if [ "$SKU" = "Basic" ]; then
-    warn "Gateway SKU is 'Basic' (not compatible with Standard PIP)."
-    DEF="VpnGw1"; [ "$ACTIVE_ACTIVE" = "true" ] && DEF="VpnGw1AZ"
-    read -rp "Target SKU [${DEF}]: " INPUT_SKU
-    TARGET_SKU="${INPUT_SKU:-$DEF}"
-    log "Will recreate gateway with TARGET_SKU=$TARGET_SKU."
+    warn "Gateway SKU is 'Basic' (compatible with **Basic** PIP only)."
+    echo "Choose target SKU:"
+    echo "  1) Stay on Basic (use Basic Public IP)"
+    echo "  2) Upgrade to VpnGw1 (use Standard Public IP)"
+    read -rp "Enter 1 or 2 [2]: " s
+    if [ "$s" = "1" ]; then
+      TARGET_SKU="Basic"
+    else
+      TARGET_SKU="VpnGw1"; [ "$ACTIVE_ACTIVE" = "true" ] && TARGET_SKU="VpnGw1AZ"
+    fi
+    log "Will recreate with TARGET_SKU=$TARGET_SKU."
   else
     log "Current SKU ($SKU) is compatible with Standard PIP."
-    TARGET_SKU="$SKU"
   fi
 fi
 
-# ---------- Discover connections (if gateway exists) ----------
+# Discover connections (if gateway exists)
 if [ "$GW_EXISTS" = true ]; then
   log "Discovering vpn-connections that reference this gateway..."
   CONNS=$({
@@ -99,25 +152,23 @@ if [ "$GW_EXISTS" = true ]; then
       --query "[?virtualNetworkGateway2 && virtualNetworkGateway2.id=='${GW_ID}'].name" -o tsv
   } | sort -u)
 
-  if [ -z "$CONNS" ]; then
-    warn "No connections reference $GW."
-  else
-    log "Connections:"; printf ' - %s\n' $CONNS
-  fi
+  if [ -z "$CONNS" ]; then warn "No connections reference $GW."; else log "Connections:"; printf ' - %s\n' $CONNS; fi
   printf "%s\n" $CONNS > "$BACKUP_DIR/connections.txt"
 fi
 
-# ---------- Menu ----------
+# -------- Menu --------
 echo
 echo "Choose an action:"
 echo "  1) Backup only"
 echo "  2) Backup and recreate gateway with new Public IP(s)"
-echo "  3) Restore from a previous backup (recreate gateway + connections)"
-read -rp "Enter 1, 2, or 3: " CHOICE
+echo "  3) Restore from a previous backup (gateway + connections)"
+echo "  4) Restore connections only from a previous backup (gateway already exists)"
+read -rp "Enter 1, 2, 3, or 4: " CHOICE
 echo
 
-# ---------- Option 1 & common backup ----------
+# -------- Common backup --------
 backup_now(){
+  [ -z "$CONNS" ] && return 0
   log "Backing up connection JSON + PSKs to $BACKUP_DIR ..."
   for C in $CONNS; do
     log "  * $C"
@@ -136,17 +187,21 @@ backup_now(){
   fi
 }
 
+# -------- Option 1 --------
 if [ "$CHOICE" = "1" ]; then
-  if [ "$GW_EXISTS" = true ]; then backup_now; fi
+  [ "$GW_EXISTS" = true ] && backup_now
   log "Backup complete. No changes made."; exit 0
 fi
 
-# ---------- Option 2: Backup + Recreate from current ----------
+# -------- Option 2: Backup + Recreate current --------
 if [ "$CHOICE" = "2" ]; then
   if [ "$GW_EXISTS" != true ]; then warn "Gateway not found; use option 3 (Restore)."; exit 1; fi
   backup_now
 
-  # target PIPs
+  # Determine proper PIP SKU
+  PIP_SKU=$(pip_sku_for_target "$TARGET_SKU")
+
+  # Collect PIPs
   if [ "$ACTIVE_ACTIVE" = "true" ]; then
     log "Active-Active detected: requires TWO Public IPs."
     [ -z "$NEW_PIP" ] && read -rp "Enter NEW_PIP (IP #1 name): " NEW_PIP
@@ -155,33 +210,21 @@ if [ "$CHOICE" = "2" ]; then
     [ -z "$NEW_PIP" ] && read -rp "Enter NEW_PIP (Public IP name): " NEW_PIP
   fi
 
-  log "Ensuring target Public IP resource(s) exist (Standard, Static):"
-  create_pip_if_missing "$NEW_PIP"  "$LOC"
-  [ "$ACTIVE_ACTIVE" = "true" ] && create_pip_if_missing "$NEW_PIP2" "$LOC"
+  log "Ensuring target Public IP resource(s) exist ($PIP_SKU, Static):"
+  create_pip_if_missing "$NEW_PIP"  "$LOC" "$PIP_SKU"
+  [ "$ACTIVE_ACTIVE" = "true" ] && create_pip_if_missing "$NEW_PIP2" "$LOC" "$PIP_SKU"
 
   echo; log "!!! DESTRUCTIVE STEP WARNING !!!"
-  echo "This will:"
-  echo "  - Delete the vpn-connection objects listed above"
-  echo "  - Delete the VNet gateway $GW"
-  echo "  - Recreate it with new PIP(s) and SKU=$TARGET_SKU"
-  echo "  - Recreate the connections (same names, PSKs, policies)"
+  echo "This will delete connections, delete the gateway, create it with NEW_PIP(s) and SKU=$TARGET_SKU, then recreate connections."
   read -rp "Type RECREATE to proceed: " CONFIRM
   [ "$CONFIRM" != "RECREATE" ] && { warn "Aborted by user."; exit 1; }
 
-  # delete connections (no --yes in 2.76.0)
-  if [ -n "$CONNS" ]; then
-    log "Deleting existing connections ..."
-    for C in $CONNS; do
-      log "  - $C"
-      az network vpn-connection delete -g "$RG" -n "$C" || warn "    - delete failed"
-    done
-  fi
+  # Delete connections FIRST, then gateway
+  [ -n "$GW_ID" ] && delete_conns_for_gw "$RG" "$GW_ID"
+  log "Deleting gateway $GW ..."; az network vnet-gateway delete -g "$RG" -n "$GW" || warn "Gateway delete returned error (continuing)"
+  wait_delete_gw "$RG" "$GW"
 
-  # delete gateway
-  log "Deleting gateway $GW ..."
-  az network vnet-gateway delete -g "$RG" -n "$GW" || warn "Gateway delete returned error (continuing)"
-
-  # recreate gateway (BGP: use --asn instead of --enable-bgp)
+  # Recreate gateway (BGP via --asn if present)
   log "Recreating gateway $GW with new PIP(s) and SKU=$TARGET_SKU ..."
   if [ "$ACTIVE_ACTIVE" = "true" ]; then
     if [ -n "$ASN" ] && [ "$ASN" != "None" ]; then
@@ -209,7 +252,6 @@ if [ "$CHOICE" = "2" ]; then
     fi
   fi
 
-  # poll until Succeeded
   log "Waiting for gateway provisioningState..."
   for i in {1..60}; do
     state=$(az network vnet-gateway show -g "$RG" -n "$GW" --query provisioningState -o tsv 2>/dev/null)
@@ -218,27 +260,17 @@ if [ "$CHOICE" = "2" ]; then
   done
   log "Gateway provisioningState: ${state:-unknown}"
 
-  # recreate connections (from current backup)
   RESTORE_SRC="$BACKUP_DIR"
 fi
 
-# ---------- Option 3: Restore from a previous backup ----------
+# -------- Option 3: Restore GW + connections from previous backup --------
 if [ "$CHOICE" = "3" ]; then
-  # list backups newest→oldest
-  echo "Available backups (newest first):"
-  mapfile -t BKLIST < <(ls -1d gw-backup-* 2>/dev/null | sort -r)
-  if [ "${#BKLIST[@]}" -eq 0 ]; then
-    warn "No gw-backup-* folders found in current directory."; exit 1
-  fi
-  i=1
-  for b in "${BKLIST[@]}"; do echo "  [$i] $b"; i=$((i+1)); done
+  build_valid_backup_list
+  if [ "${#BKLIST[@]}" -eq 0 ]; then warn "No valid gw-backup-* folders found."; exit 1; fi
+  echo "Available backups (newest first):"; i=1; for b in "${BKLIST[@]}"; do echo "  [$i] $b"; i=$((i+1)); done
   read -rp "Select a backup by number: " pick
+  [[ "$pick" =~ ^[0-9]+$ ]] && [ "$pick" -ge 1 ] && [ "$pick" -le "${#BKLIST[@]}" ] || { warn "Invalid selection."; exit 1; }
   RESTORE_SRC="${BKLIST[$((pick-1))]}"
-  if [ -z "$RESTORE_SRC" ] || [ ! -d "$RESTORE_SRC" ]; then warn "Invalid selection."; exit 1; fi
-
-  # load restore details
-  if [ ! -f "$RESTORE_SRC/gateway-summary.json" ]; then warn "Missing gateway-summary.json in $RESTORE_SRC"; exit 1; fi
-  if [ ! -d "$RESTORE_SRC/conn-json" ]; then warn "Missing conn-json folder in $RESTORE_SRC"; exit 1; fi
 
   LOC=$(jq -r '.location' "$RESTORE_SRC/gateway-summary.json")
   TARGET_SKU=$(jq -r '.sku' "$RESTORE_SRC/gateway-summary.json")
@@ -247,27 +279,23 @@ if [ "$CHOICE" = "3" ]; then
   SUBNET_ID=$(jq -r '.subnetId' "$RESTORE_SRC/gateway-summary.json")
   VNET_NAME=$(echo "$SUBNET_ID" | awk -F'/virtualNetworks/' '{print $2}' | awk -F'/subnets/' '{print $1}')
   ASN=$(jq -r '.asn // empty' "$RESTORE_SRC/gateway-summary.json")
-  ACTIVE_ACTIVE=false # summary doesn’t capture AA reliably; adapt if you store it
+
+  PIP_SKU=$(pip_sku_for_target "$TARGET_SKU")
   [ -z "$NEW_PIP" ] && read -rp "Enter NEW_PIP (Public IP name): " NEW_PIP
-  log "Ensuring Public IP $NEW_PIP exists..."; create_pip_if_missing "$NEW_PIP" "$LOC"
-  # (if you had active-active backups, extend here to prompt for NEW_PIP2)
+  log "Ensuring Public IP $NEW_PIP exists..."; create_pip_if_missing "$NEW_PIP" "$LOC" "$PIP_SKU"
 
   echo; log "This will recreate gateway $GW using backup $RESTORE_SRC and NEW_PIP=$NEW_PIP"
   read -rp "Type RESTORE to proceed: " CONFIRM
   [ "$CONFIRM" != "RESTORE" ] && { warn "Aborted by user."; exit 1; }
 
-  # attempt delete existing GW (if any)
-  az network vnet-gateway show -g "$RG" -n "$GW" >/dev/null 2>&1 && {
-    log "Deleting existing gateway $GW (if present) ..."
-    # must delete any blocking connections first
-    mapfile -t EXISTING_CONNS < <(az network vpn-connection list -g "$RG" --query "[?contains(id,'/virtualNetworkGateways/${GW}')].name" -o tsv 2>/dev/null)
-    if [ "${#EXISTING_CONNS[@]}" -gt 0 ]; then
-      for C in "${EXISTING_CONNS[@]}"; do log "  - deleting $C"; az network vpn-connection delete -g "$RG" -n "$C" || true; done
-    fi
-    az network vnet-gateway delete -g "$RG" -n "$GW" || true
-  }
+  # If a GW exists, cleanly remove connections then delete GW
+  if az network vnet-gateway show -g "$RG" -n "$GW" >/dev/null 2>&1; then
+    CUR_GW_ID=$(az network vnet-gateway show -g "$RG" -n "$GW" --query id -o tsv)
+    delete_conns_for_gw "$RG" "$CUR_GW_ID"
+    log "Deleting existing gateway $GW ..."; az network vnet-gateway delete -g "$RG" -n "$GW" || true
+    wait_delete_gw "$RG" "$GW"
+  fi
 
-  # recreate GW from backup values (BGP: use --asn when present)
   log "Recreating gateway $GW from backup with SKU=$TARGET_SKU ..."
   if [ -n "$ASN" ] && [ "$ASN" != "None" ]; then
     az network vnet-gateway create -g "$RG" -n "$GW" --location "$LOC" \
@@ -288,10 +316,25 @@ if [ "$CHOICE" = "3" ]; then
     sleep 15
   done
   log "Gateway provisioningState: ${state:-unknown}"
+
+  RESTORE_SRC="$RESTORE_SRC"
 fi
 
-# ---------- Recreate connections from RESTORE_SRC (used by 2 and 3) ----------
-if [ -n "$RESTORE_SRC" ]; then
+# -------- Option 4: Restore connections only --------
+if [ "$CHOICE" = "4" ]; then
+  if ! az network vnet-gateway show -g "$RG" -n "$GW" >/dev/null 2>&1; then
+    warn "Gateway $GW not found. Use option 2 or 3 first."; exit 1
+  fi
+  build_valid_backup_list
+  if [ "${#BKLIST[@]}" -eq 0 ]; then warn "No valid gw-backup-* folders found."; exit 1; fi
+  echo "Available backups (newest first):"; i=1; for b in "${BKLIST[@]}"; do echo "  [$i] $b"; i=$((i+1)); done
+  read -rp "Select a backup by number: " pick
+  [[ "$pick" =~ ^[0-9]+$ ]] && [ "$pick" -ge 1 ] && [ "$pick" -le "${#BKLIST[@]}" ] || { warn "Invalid selection."; exit 1; }
+  RESTORE_SRC="${BKLIST[$((pick-1))]}"
+fi
+
+# -------- Recreate connections from RESTORE_SRC (for 2, 3, 4) --------
+if [ -n "${RESTORE_SRC:-}" ]; then
   log "Recreating connections from $RESTORE_SRC ..."
   for CJ in "$RESTORE_SRC"/conn-json/*.json; do
     [ -s "$CJ" ] || continue
@@ -327,7 +370,7 @@ if [ -n "$RESTORE_SRC" ]; then
       continue
     fi
 
-    # Apply IPsec policies
+    # Apply IPsec policies — CLI 2.76.0 requires --sa-max-size; default to 100MB if backup had 0
     POLCOUNT=$(jq -r '(.ipsecPolicies | length) // 0' "$CJ" 2>/dev/null)
     if [ "$POLCOUNT" -gt 0 ]; then
       for idx in $(seq 0 $((POLCOUNT-1))); do
@@ -339,29 +382,18 @@ if [ -n "$RESTORE_SRC" ]; then
         PFS=$(jq -r ".ipsecPolicies[$idx].pfsGroup" "$CJ")
         LIF=$(jq -r ".ipsecPolicies[$idx].saLifeTimeSeconds" "$CJ")
         SAKB=$(jq -r ".ipsecPolicies[$idx].saDataSizeKilobytes // 0" "$CJ")
-        SABYTES=$(kb_to_bytes "$SAKB")
+        SABYTES=$(kb_to_bytes "$SAKB"); [ "$SABYTES" -le 0 ] && SABYTES=102400000
 
         log "    - Applying IPsec policy #$((idx+1)) to $C"
-        if [ "$SABYTES" -gt 0 ]; then
-          az network vpn-connection ipsec-policy add \
-            --resource-group "$RG" \
-            --connection-name "$C" \
-            --dh-group "$DHG" \
-            --ike-encryption "$IKE" --ike-integrity "$IKI" \
-            --ipsec-encryption "$SAe" --ipsec-integrity "$SAi" \
-            --pfs-group "$PFS" \
-            --sa-lifetime "$LIF" \
-            --sa-max-size "$SABYTES" >/dev/null || warn "      * policy add failed"
-        else
-          az network vpn-connection ipsec-policy add \
-            --resource-group "$RG" \
-            --connection-name "$C" \
-            --dh-group "$DHG" \
-            --ike-encryption "$IKE" --ike-integrity "$IKI" \
-            --ipsec-encryption "$SAe" --ipsec-integrity "$SAi" \
-            --pfs-group "$PFS" \
-            --sa-lifetime "$LIF" >/dev/null || warn "      * policy add failed"
-        fi
+        az network vpn-connection ipsec-policy add \
+          --resource-group "$RG" \
+          --connection-name "$C" \
+          --dh-group "$DHG" \
+          --ike-encryption "$IKE" --ike-integrity "$IKI" \
+          --ipsec-encryption "$SAe" --ipsec-integrity "$SAi" \
+          --pfs-group "$PFS" \
+          --sa-lifetime "$LIF" \
+          --sa-max-size "$SABYTES" >/dev/null || warn "      * policy add failed"
       done
     fi
   done
@@ -370,3 +402,4 @@ if [ -n "$RESTORE_SRC" ]; then
   az network vpn-connection list -g "$RG" --query "[].{name:name,status:connectionStatus}" -o table
   echo; log "Backups live at: $RESTORE_SRC and $BACKUP_DIR"
 fi
+

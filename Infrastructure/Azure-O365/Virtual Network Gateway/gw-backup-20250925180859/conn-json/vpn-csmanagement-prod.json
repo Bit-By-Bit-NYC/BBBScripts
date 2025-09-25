@@ -1,0 +1,35 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "NotConnected",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 0,
+  "egressBytesTransferred": 2982085,
+  "enableBgp": false,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"f4953d3c-fb91-4e6f-a561-049542273bc5\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/5a8f2111-71ad-42fb-a6e1-58d3676ca6ad/resourceGroups/rsg-csmanagement/providers/Microsoft.Network/connections/vpn-csmanagement-prod",
+  "ingressBytesTransferred": 9940515,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/5a8f2111-71ad-42fb-a6e1-58d3676ca6ad/resourceGroups/rsg-csmanagement/providers/Microsoft.Network/localNetworkGateways/lng-csmanagement-prod",
+    "resourceGroup": "rsg-csmanagement"
+  },
+  "location": "eastus2",
+  "name": "vpn-csmanagement-prod",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rsg-csmanagement",
+  "resourceGuid": "e87af07b-f32c-48f3-b6c6-6efa584fa070",
+  "routingWeight": 0,
+  "trafficSelectorPolicies": [],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/5a8f2111-71ad-42fb-a6e1-58d3676ca6ad/resourceGroups/rsg-csmanagement/providers/Microsoft.Network/virtualNetworkGateways/vng-csmanagement",
+    "resourceGroup": "rsg-csmanagement"
+  }
+}
