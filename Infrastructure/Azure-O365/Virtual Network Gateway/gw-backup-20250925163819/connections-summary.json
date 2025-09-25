@@ -1,0 +1,26 @@
+[
+  {
+    "name": "cn-datto-to-azure",
+    "connectionType": "IPsec",
+    "status": "Connected",
+    "enableBgp": false,
+    "usePolicyBasedTrafficSelectors": false,
+    "remote": {
+      "type": "LocalNetworkGateway",
+      "id": "/subscriptions/74fe5f2d-c8d1-487c-9c9d-78a2a2fe77cd/resourceGroups/rg-spirits-coldconvert/providers/Microsoft.Network/localNetworkGateways/lng-datto-test",
+      "peerAddress": null
+    },
+    "ipsecPolicies": [
+      {
+        "dhGroup": "DHGroup14",
+        "ikeEncryption": "AES256",
+        "ikeIntegrity": "SHA1",
+        "ipsecEncryption": "AES256",
+        "ipsecIntegrity": "SHA1",
+        "pfsGroup": "PFS2",
+        "saDataSizeKilobytes": 0,
+        "saLifeTimeSeconds": 86400
+      }
+    ]
+  }
+]
