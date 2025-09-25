@@ -1,0 +1,14 @@
+# Azure VNet Gateway cutover configuration
+# -----------------------------------------
+# Resource group that contains the Virtual Network Gateway
+RG=rg-spirits-coldconvert
+
+# Name of the Virtual Network Gateway whose public IP you are replacing
+GW=vng-datto-lab
+
+# Name of the *new* Public IP resource to attach to the gateway after recreation
+# (If it doesn’t already exist, the script will create it as Standard/Static)
+NEW_PIP=pip-vng-datto-swap2
+
+# If the gateway is Active-Active, uncomment and set a second Public IP name
+# NEW_PIP2=<second-public-ip-name>
