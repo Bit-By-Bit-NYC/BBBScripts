@@ -84,6 +84,9 @@ wait_delete_gw(){
   warn "Timed out waiting for gateway delete (continuing)."
 }
 
+# Emit a flag only when value is "true"
+flag_if_true(){ [ "$1" = "true" ] && echo "$2"; }
+
 # -------- Inputs --------
 [ -z "$RG" ] && read -rp "Resource Group (RG): " RG
 [ -z "$GW" ] && read -rp "Gateway Name (GW): " GW
@@ -126,7 +129,7 @@ if [ "$GW_EXISTS" = true ]; then
 
   TARGET_SKU="$SKU"
   if [ "$SKU" = "Basic" ]; then
-    warn "Gateway SKU is 'Basic' (compatible with **Basic** PIP only)."
+    warn "Gateway SKU is 'Basic' (Basic PIP only)."
     echo "Choose target SKU:"
     echo "  1) Stay on Basic (use Basic Public IP)"
     echo "  2) Upgrade to VpnGw1 (use Standard Public IP)"
@@ -198,7 +201,7 @@ if [ "$CHOICE" = "2" ]; then
   if [ "$GW_EXISTS" != true ]; then warn "Gateway not found; use option 3 (Restore)."; exit 1; fi
   backup_now
 
-  # Determine proper PIP SKU
+  # Determine proper PIP SKU from TARGET_SKU (may have been changed above)
   PIP_SKU=$(pip_sku_for_target "$TARGET_SKU")
 
   # Collect PIPs
@@ -224,7 +227,7 @@ if [ "$CHOICE" = "2" ]; then
   log "Deleting gateway $GW ..."; az network vnet-gateway delete -g "$RG" -n "$GW" || warn "Gateway delete returned error (continuing)"
   wait_delete_gw "$RG" "$GW"
 
-  # Recreate gateway (BGP via --asn if present)
+  # Recreate gateway with TARGET_SKU (BGP via --asn if present)
   log "Recreating gateway $GW with new PIP(s) and SKU=$TARGET_SKU ..."
   if [ "$ACTIVE_ACTIVE" = "true" ]; then
     if [ -n "$ASN" ] && [ "$ASN" != "None" ]; then
@@ -263,7 +266,8 @@ if [ "$CHOICE" = "2" ]; then
   RESTORE_SRC="$BACKUP_DIR"
 fi
 
-# -------- Option 3: Restore GW + connections from previous backup --------
+# -------- Option 3: Restore GW + connections from previous backup (HONORS TARGET_SKU) --------
+# ---------- Option 3: Restore GW + connections from previous backup (HONORS/ASKS FOR NON-BASIC) ----------
 if [ "$CHOICE" = "3" ]; then
   build_valid_backup_list
   if [ "${#BKLIST[@]}" -eq 0 ]; then warn "No valid gw-backup-* folders found."; exit 1; fi
@@ -272,23 +276,50 @@ if [ "$CHOICE" = "3" ]; then
   [[ "$pick" =~ ^[0-9]+$ ]] && [ "$pick" -ge 1 ] && [ "$pick" -le "${#BKLIST[@]}" ] || { warn "Invalid selection."; exit 1; }
   RESTORE_SRC="${BKLIST[$((pick-1))]}"
 
+  # Read values from the backup summary
   LOC=$(jq -r '.location' "$RESTORE_SRC/gateway-summary.json")
-  TARGET_SKU=$(jq -r '.sku' "$RESTORE_SRC/gateway-summary.json")
+  BACKUP_SKU=$(jq -r '.sku' "$RESTORE_SRC/gateway-summary.json")
   GTYPE=$(jq -r '.gatewayType' "$RESTORE_SRC/gateway-summary.json")
   VTYPE=$(jq -r '.vpnType' "$RESTORE_SRC/gateway-summary.json")
   SUBNET_ID=$(jq -r '.subnetId' "$RESTORE_SRC/gateway-summary.json")
   VNET_NAME=$(echo "$SUBNET_ID" | awk -F'/virtualNetworks/' '{print $2}' | awk -F'/subnets/' '{print $1}')
   ASN=$(jq -r '.asn // empty' "$RESTORE_SRC/gateway-summary.json")
 
-  PIP_SKU=$(pip_sku_for_target "$TARGET_SKU")
-  [ -z "$NEW_PIP" ] && read -rp "Enter NEW_PIP (Public IP name): " NEW_PIP
-  log "Ensuring Public IP $NEW_PIP exists..."; create_pip_if_missing "$NEW_PIP" "$LOC" "$PIP_SKU"
+  # If TARGET_SKU is not set or is Basic, prompt for a non-Basic choice
+  if [ -z "${TARGET_SKU:-}" ] || [ "$TARGET_SKU" = "Basic" ]; then
+    echo "Select target gateway SKU (non-Basic):"
+    echo "  1) VpnGw1"
+    echo "  2) VpnGw2"
+    echo "  3) VpnGw3"
+    echo "  4) VpnGw1AZ"
+    echo "  5) VpnGw2AZ"
+    echo "  6) VpnGw3AZ"
+    read -rp "Enter 1-6 [1]: " sku_pick
+    case "${sku_pick:-1}" in
+      1) FINAL_SKU="VpnGw1" ;;
+      2) FINAL_SKU="VpnGw2" ;;
+      3) FINAL_SKU="VpnGw3" ;;
+      4) FINAL_SKU="VpnGw1AZ" ;;
+      5) FINAL_SKU="VpnGw2AZ" ;;
+      6) FINAL_SKU="VpnGw3AZ" ;;
+      *) FINAL_SKU="VpnGw1" ;;
+    esac
+  else
+    FINAL_SKU="$TARGET_SKU"
+  fi
+  log "Restoring with FINAL_SKU=$FINAL_SKU (backup had $BACKUP_SKU)."
 
-  echo; log "This will recreate gateway $GW using backup $RESTORE_SRC and NEW_PIP=$NEW_PIP"
+  # PIP SKU from FINAL_SKU
+  PIP_SKU=$(pip_sku_for_target "$FINAL_SKU")
+  [ -z "$NEW_PIP" ] && read -rp "Enter NEW_PIP (Public IP name): " NEW_PIP
+  log "Ensuring Public IP $NEW_PIP exists ($PIP_SKU, Static) ..."
+  create_pip_if_missing "$NEW_PIP" "$LOC" "$PIP_SKU"
+
+  echo; log "This will recreate gateway $GW using backup $RESTORE_SRC and NEW_PIP=$NEW_PIP (SKU=$FINAL_SKU)"
   read -rp "Type RESTORE to proceed: " CONFIRM
   [ "$CONFIRM" != "RESTORE" ] && { warn "Aborted by user."; exit 1; }
 
-  # If a GW exists, cleanly remove connections then delete GW
+  # If a GW exists, cleanly remove connections then delete GW; wait until gone
   if az network vnet-gateway show -g "$RG" -n "$GW" >/dev/null 2>&1; then
     CUR_GW_ID=$(az network vnet-gateway show -g "$RG" -n "$GW" --query id -o tsv)
     delete_conns_for_gw "$RG" "$CUR_GW_ID"
@@ -296,16 +327,26 @@ if [ "$CHOICE" = "3" ]; then
     wait_delete_gw "$RG" "$GW"
   fi
 
-  log "Recreating gateway $GW from backup with SKU=$TARGET_SKU ..."
+  # Decide whether to pass --asn (only if ASN present AND FINAL_SKU != Basic)
+  PASS_ASN=false
   if [ -n "$ASN" ] && [ "$ASN" != "None" ]; then
+    case "$FINAL_SKU" in
+      Basic) PASS_ASN=false ;;
+      *)     PASS_ASN=true  ;;
+    esac
+  fi
+
+  # Recreate gateway with FINAL_SKU
+  log "Recreating gateway $GW with SKU=$FINAL_SKU ..."
+  if [ "$PASS_ASN" = true ]; then
     az network vnet-gateway create -g "$RG" -n "$GW" --location "$LOC" \
       --public-ip-addresses "$NEW_PIP" --vnet "$VNET_NAME" \
-      --gateway-type "$GTYPE" --vpn-type "$VTYPE" --sku "$TARGET_SKU" \
+      --gateway-type "$GTYPE" --vpn-type "$VTYPE" --sku "$FINAL_SKU" \
       --asn "$ASN" || warn "Gateway create failed"
   else
     az network vnet-gateway create -g "$RG" -n "$GW" --location "$LOC" \
       --public-ip-addresses "$NEW_PIP" --vnet "$VNET_NAME" \
-      --gateway-type "$GTYPE" --vpn-type "$VTYPE" --sku "$TARGET_SKU" \
+      --gateway-type "$GTYPE" --vpn-type "$VTYPE" --sku "$FINAL_SKU" \
       || warn "Gateway create failed"
   fi
 
@@ -402,4 +443,3 @@ if [ -n "${RESTORE_SRC:-}" ]; then
   az network vpn-connection list -g "$RG" --query "[].{name:name,status:connectionStatus}" -o table
   echo; log "Backups live at: $RESTORE_SRC and $BACKUP_DIR"
 fi
-
