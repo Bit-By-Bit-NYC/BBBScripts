@@ -1,0 +1,7 @@
+SUBSCRIPTION_ID=98a534ec-4bbd-461f-b87d-55d836a38a57
+RESOURCE_GROUP=rg-fax-dr
+VAULT_NAME=rsv-fax-dr
+FABRIC_NAME=rsv-fax-dr-vmwarefabric
+PROTECTION_CONTAINER_NAME=rsv-fax-dr1d38replicationcontainer
+API_VERSION=2025-02-01
+DEBUG=true
