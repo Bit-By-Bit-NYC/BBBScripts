@@ -13,6 +13,21 @@ log(){ printf '[%(%Y-%m-%dT%H:%M:%SZ)T] %s\n' -1 "$*" >&2; }
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1" >&2; exit 1; }; }
 need az; need jq
 
+# Optional: pretty time for summary (e.g., 754511 -> 8d17h31m51s)
+secs_human(){
+  local s=${1:-0}
+  [[ "$s" =~ ^[0-9]+$ ]] || { echo "$s"; return; }
+  local d=$(( s/86400 )); s=$(( s%86400 ))
+  local h=$(( s/3600 ));  s=$(( s%3600  ))
+  local m=$(( s/60   ));  s=$(( s%60     ))
+  local out=""
+  (( d>0 )) && out+="${d}d"
+  (( h>0 )) && out+="${h}h"
+  (( m>0 )) && out+="${m}m"
+  out+="${s}s"
+  echo "$out"
+}
+
 # ===== Config =====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CFG="$SCRIPT_DIR/config.txt"
@@ -41,27 +56,25 @@ STATE_DIR="$SCRIPT_DIR/state"
 LAST_JSON="$STATE_DIR/last_status.json"
 mkdir -p "$STATE_DIR"
 
-# ===== Fetch ALL pages robustly into JSONL =====
+# ===== Fetch ALL pages into JSONL =====
 log "Fetching protected items…"
 TMP_JSONL="$(mktemp)"
 URL="$LIST_URL"
 while : ; do
   PAGE=$(az rest --method get --url "$URL")
-  # append items as JSONL
   jq -c '.value[]? // empty' <<<"$PAGE" >> "$TMP_JSONL"
   next=$(jq -r '.nextLink // empty' <<<"$PAGE")
   [[ -z "$next" ]] && break
   URL="$next"
 done
 
-# If nothing returned, bail gracefully
 if [[ ! -s "$TMP_JSONL" ]]; then
   echo "No items returned." >&2
   rm -f "$TMP_JSONL"
   exit 0
 fi
 
-# ===== Build current snapshot array =====
+# ===== Current snapshot array =====
 CUR=$(jq -c -s '
   map({
     rpi: (.name // ""),
@@ -72,19 +85,22 @@ CUR=$(jq -c -s '
   })
 ' "$TMP_JSONL")
 
-# Load previous snapshot
+# Previous snapshot (if any)
 PREV='[]'
 [[ -f "$LAST_JSON" ]] && PREV=$(cat "$LAST_JSON")
 
-# ===== Precompute counts per status for headers =====
+# ===== Status counts for headers + totals =====
 STATUS_COUNTS_JSON=$(jq -c '
   group_by(.status) | map({key: .[0].status, value: length}) | from_entries
 ' <<<"$CUR")
+TOTAL_ITEMS=$(jq 'length' <<<"$CUR")
+TOTAL_PROTECTED=$(jq -r --arg s "Protected" '.[$s] // 0' <<<"$STATUS_COUNTS_JSON")
 
-# ===== Prepare ordered rows (status, health-group, rpo) and diff flags =====
-# Output tab-separated lines: status \t rpi \t friendly \t health \t rpo \t changedFlag
+# ===== Prepare ordered rows with refined change rules =====
+# Output TSV: status \t rpi \t friendly \t health \t rpo \t changedFlag
 ROWS_TSV=$(jq -r --argjson prev "$PREV" '
   def to_map(a): a | map({key:.rpi, value:.}) | from_entries;
+
   (to_map($prev)) as $pm
   | map(. + {
       group: (if .health == "Normal" then 1 else 0 end),
@@ -92,10 +108,25 @@ ROWS_TSV=$(jq -r --argjson prev "$PREV" '
       changed: (
         if ($pm[.rpi] // null) == null then "new"
         else (
-          ((.health != $pm[.rpi].health) or
-           (.status != $pm[.rpi].status) or
-           (.rpo != $pm[.rpi].rpo)) | if . then "changed" else "" end
-        )
+          (.health != $pm[.rpi].health) or
+          (.status != $pm[.rpi].status) or
+          (
+            # RPO significant change rules (seconds):
+            # - prev "null" -> now numeric
+            ((($pm[.rpi].rpo|tostring) == "null") and ((.rpo|tostring) != "null"))
+            or
+            # - crossed 3600s threshold in either direction
+            (
+              (try ($pm[.rpi].rpo|tonumber) catch 0) < 3600
+              and (try (.rpo|tonumber) catch 0) >= 3600
+            )
+            or
+            (
+              (try ($pm[.rpi].rpo|tonumber) catch 0) >= 3600
+              and (try (.rpo|tonumber) catch 0) < 3600
+            )
+          )
+        ) | if . then "changed" else "" end
         end
       )
     })
@@ -105,11 +136,10 @@ ROWS_TSV=$(jq -r --argjson prev "$PREV" '
   | @tsv
 ' <<<"$CUR")
 
-# ===== Print grouped with headers and colored rows =====
+# ===== Print grouped with headers =====
 last_status=""
 idx=1
 while IFS=$'\t' read -r STATUS RPI FRIENDLY HEALTH RPO CHG; do
-  # header?
   if [[ "$STATUS" != "$last_status" ]]; then
     [[ -n "$last_status" ]] && printf "\n"
     COUNT=$(jq -r --arg s "$STATUS" '.[$s] // 0' <<<"$STATUS_COUNTS_JSON")
@@ -118,7 +148,6 @@ while IFS=$'\t' read -r STATUS RPI FRIENDLY HEALTH RPO CHG; do
     idx=1
   fi
 
-  # color by health
   case "$HEALTH" in
     Normal) COLOR="$BLUE" ;;
     Warning) COLOR="$YELLOW" ;;
@@ -132,7 +161,6 @@ while IFS=$'\t' read -r STATUS RPI FRIENDLY HEALTH RPO CHG; do
     RPO_DISP="${BOLDY}${RPO}${RESET}"
   fi
 
-  # change flag
   flag=""
   [[ "$CHG" == "changed" ]] && flag="${MAGENTA}★ changed${RESET}"
   [[ "$CHG" == "new"     ]] && flag="${MAGENTA}★ new${RESET}"
@@ -150,6 +178,45 @@ done <<< "$ROWS_TSV"
 # ===== Save snapshot =====
 echo "$CUR" > "$LAST_JSON"
 printf "\n%sSaved snapshot to:%s %s\n" "$DIM" "$RESET" "$LAST_JSON"
+
+# ===== Final summary (per group + totals + shortest/longest RPO) =====
+echo
+echo "===== Summary ====="
+# Stable order (alphabetical by status)
+mapfile -t ALL_STATUSES < <(jq -r 'keys[]' <<<"$STATUS_COUNTS_JSON" | sort)
+for S in "${ALL_STATUSES[@]}"; do
+  C=$(jq -r --arg s "$S" '.[$s] // 0' <<<"$STATUS_COUNTS_JSON")
+  printf "  - %s: %d\n" "$S" "$C"
+done
+printf "  - Total Protected: %d\n" "$TOTAL_PROTECTED"
+printf "  - Total Items: %d\n" "$TOTAL_ITEMS"
+
+# Shortest / Longest RPO (ignoring null)
+NUMERIC=$(jq -c '
+  [ .[] | select((.rpo|tostring)!="null")
+    | {rpi, friendly, rpo: (try (.rpo|tonumber) catch empty)} ]
+' <<<"$CUR")
+
+if [[ "$(jq 'length' <<<"$NUMERIC")" -gt 0 ]]; then
+  MIN_RPO=$(jq 'min_by(.rpo).rpo' <<<"$NUMERIC")
+  MAX_RPO=$(jq 'max_by(.rpo).rpo' <<<"$NUMERIC")
+
+  # Get *all* entries matching min/max (handles ties)
+  MIN_LINES=$(jq -r --argjson m "$MIN_RPO" '
+    .[] | select(.rpo == $m) | "\(.friendly) [\(.rpi)]"
+  ' <<<"$NUMERIC")
+  MAX_LINES=$(jq -r --argjson m "$MAX_RPO" '
+    .[] | select(.rpo == $m) | "\(.friendly) [\(.rpi)]"
+  ' <<<"$NUMERIC")
+
+  printf "  - Shortest RPO: %s (%s)\n" "$MIN_RPO" "$(secs_human "$MIN_RPO")"
+  while IFS= read -r L; do [[ -n "$L" ]] && printf "      * %s\n" "$L"; done <<<"$MIN_LINES"
+  printf "  - Longest RPO: %s (%s)\n" "$MAX_RPO" "$(secs_human "$MAX_RPO")"
+  while IFS= read -r L; do [[ -n "$L" ]] && printf "      * %s\n" "$L"; done <<<"$MAX_LINES"
+else
+  echo "  - Shortest RPO: n/a"
+  echo "  - Longest  RPO: n/a"
+fi
 
 # cleanup
 rm -f "$TMP_JSONL"
