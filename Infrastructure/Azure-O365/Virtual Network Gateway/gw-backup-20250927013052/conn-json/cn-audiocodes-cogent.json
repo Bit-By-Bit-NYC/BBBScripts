@@ -1,0 +1,38 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "Connected",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 45,
+  "egressBytesTransferred": 226028917926,
+  "enableBgp": true,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"a81ea625-c840-4f26-a1ad-6b0db2b1acac\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/connections/cn-audiocodes-cogent",
+  "ingressBytesTransferred": 155083257283,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/localNetworkGateways/lng-drt-cogent",
+    "resourceGroup": "rg-az-audiocodes1"
+  },
+  "location": "eastus2",
+  "name": "cn-audiocodes-cogent",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rg-az-audiocodes1",
+  "resourceGuid": "2395f8ce-1d18-47f6-91dd-8d993c229ef3",
+  "routingWeight": 0,
+  "tags": {
+    "bbb-ticket": " 987331"
+  },
+  "trafficSelectorPolicies": [],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/virtualNetworkGateways/vgw-az-audiocodes1",
+    "resourceGroup": "rg-az-audiocodes1"
+  }
+}

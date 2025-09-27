@@ -1,0 +1,12 @@
+{
+  "name": "vgw-az-audiocodes1",
+  "id": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/virtualNetworkGateways/vgw-az-audiocodes1",
+  "location": "eastus2",
+  "sku": "VpnGw1",
+  "gatewayType": "Vpn",
+  "vpnType": "RouteBased",
+  "activeActive": true,
+  "asn": 65514,
+  "vnetId": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/virtualNetworks/az-audiocodes1-vnet",
+  "subnetId": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/virtualNetworks/az-audiocodes1-vnet/subnets/GatewaySubnet"
+}

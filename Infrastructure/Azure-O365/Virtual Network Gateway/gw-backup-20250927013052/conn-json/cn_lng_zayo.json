@@ -1,0 +1,38 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "Connected",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 45,
+  "egressBytesTransferred": 475559162251,
+  "enableBgp": true,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"7397f024-6abc-4910-982f-cdefc427a2ae\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/connections/cn_lng_zayo",
+  "ingressBytesTransferred": 366957379180,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/localNetworkGateways/lng-drt-zayo-audiocodes",
+    "resourceGroup": "rg-az-audiocodes1"
+  },
+  "location": "eastus2",
+  "name": "cn_lng_zayo",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rg-az-audiocodes1",
+  "resourceGuid": "6b84aa7e-56ae-4330-96ac-f6a8e39a01b6",
+  "routingWeight": 0,
+  "tags": {
+    "bbb-ticket": " 987331"
+  },
+  "trafficSelectorPolicies": [],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/98a534ec-4bbd-461f-b87d-55d836a38a57/resourceGroups/rg-az-audiocodes1/providers/Microsoft.Network/virtualNetworkGateways/vgw-az-audiocodes1",
+    "resourceGroup": "rg-az-audiocodes1"
+  }
+}
