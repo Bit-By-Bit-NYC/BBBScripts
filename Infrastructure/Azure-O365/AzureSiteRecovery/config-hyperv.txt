@@ -1,0 +1,8 @@
+SUBSCRIPTION_ID=5a8f2111-71ad-42fb-a6e1-58d3676ca6ad
+RESOURCE_GROUP=rg-asr-drtnjr2-westus2
+VAULT_NAME=rsv-asr-drtnjr2-westus2
+API_VERSION=2025-02-01
+DEBUG=true
+FABRIC_NAME=drt-njr2-clifton-nj-us
+PROTECTION_CONTAINER_NAME=cloud_8ee5512a-ff30-5ace-bf1d-d49e4c838952
+ASR_TYPE="hyperv"
