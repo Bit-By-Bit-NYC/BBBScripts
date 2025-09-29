@@ -2,3 +2,4 @@
 *.csv
 replback_*
 last_status.json
+Infrastructure/Azure-O365/AzureSiteRecovery/state/last_status.json
