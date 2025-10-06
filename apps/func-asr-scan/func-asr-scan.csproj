@@ -7,19 +7,18 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- Azure Functions isolated worker -->
-    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="1.22.0" />
-    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.17.4" OutputItemType="Analyzer" PrivateAssets="all" />
+<ItemGroup>
+  <!-- Azure Functions isolated worker -->
+  <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="1.22.0" />
+  <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.17.4" OutputItemType="Analyzer" PrivateAssets="all" />
 
-    <!-- Azure auth + ARM -->
-    <PackageReference Include="Azure.Identity" Version="1.12.0" />
-    <PackageReference Include="Azure.ResourceManager" Version="1.9.0" />
-    <PackageReference Include="Azure.ResourceManager.ResourceGraph" Version="1.1.0" />
-
-    <!-- Handy JSON helpers for HttpClient -->
-    <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
-  </ItemGroup>
+  <!-- Auth + ARM -->
+  <PackageReference Include="Azure.Identity" Version="1.12.0" />
+  <PackageReference Include="Azure.ResourceManager" Version="1.9.0" />
+  <PackageReference Include="Azure.ResourceManager.RecoveryServices" Version="1.2.0" />
+  <!-- HTTP JSON helpers -->
+  <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
+</ItemGroup>
 
   <ItemGroup>
     <!-- Ensures Functions host sees your functions -->
