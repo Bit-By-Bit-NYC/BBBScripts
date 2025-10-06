@@ -1,27 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>        <!-- 👈 add this -->
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-<ItemGroup>
-  <!-- Azure Functions isolated worker -->
-  <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="1.22.0" />
-  <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.17.4" OutputItemType="Analyzer" PrivateAssets="all" />
-
-  <!-- Auth + ARM -->
-  <PackageReference Include="Azure.Identity" Version="1.12.0" />
-  <PackageReference Include="Azure.ResourceManager" Version="1.9.0" />
-  <PackageReference Include="Azure.ResourceManager.RecoveryServices" Version="1.2.0" />
-  <!-- HTTP JSON helpers -->
-  <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
-</ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="1.22.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.17.4" OutputItemType="Analyzer" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http" Version="3.1.0" />
+    <PackageReference Include="Azure.Identity" Version="1.12.0" />
+    <PackageReference Include="Azure.ResourceManager" Version="1.9.0" />
+    <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
+  </ItemGroup>
 
   <ItemGroup>
-    <!-- Ensures Functions host sees your functions -->
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -30,5 +25,4 @@
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
   </ItemGroup>
-
 </Project>
