@@ -18,3 +18,7 @@ Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-site-recovery
 Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-site-recovery-vault-westus2.json
 Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-vault-scan-summary.json
 Infrastructure/Azure-O365/AzureSiteRecovery/state/last_status_config.txt.json
+
+**/local.settings.json
+**/bin/
+**/obj/
