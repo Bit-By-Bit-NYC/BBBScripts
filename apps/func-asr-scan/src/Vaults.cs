@@ -1,8 +1,7 @@
 using System.Net;
 using Azure.Identity;
 using Azure.ResourceManager;
-using Azure.ResourceManager.ResourceGraph;
-using Azure.ResourceManager.ResourceGraph.Models;
+using Azure.ResourceManager.RecoveryServices;
 
 public class Vaults
 {
@@ -13,26 +12,27 @@ public class Vaults
         var cred = new DefaultAzureCredential();
         var arm = new ArmClient(cred);
 
-        // Query all subscriptions visible to MI
-        var subIds = await arm.GetDefaultSubscriptionAsync();
-        var subs = new List<string>();
-        await foreach (var s in arm.GetSubscriptions().GetAllAsync()) subs.Add(s.Data.SubscriptionId);
+        var results = new List<object>();
 
-        // Resource Graph query to list RSVs
-        var query = new QueryRequest(subs, @"resources
-            | where type == 'microsoft.recoveryservices/vaults'
-            | project name, resourceGroup, subscriptionId, location");
+        // Enumerate all subscriptions this identity can see
+        await foreach (var sub in arm.GetSubscriptions().GetAllAsync())
+        {
+            var subClient = arm.GetSubscriptionResource(sub.Data.Id);
 
-        var client = new ResourceGraphClient(cred);
-        var res = await client.ResourcesAsync(query);
-
-        var rows = ((IEnumerable<IDictionary<string, object>>)res.Data!).Select(r => new {
-            name = r["name"], resourceGroup = r["resourceGroup"],
-            subscriptionId = r["subscriptionId"], location = r["location"]
-        });
+            // List Recovery Services Vaults in this subscription
+            await foreach (RecoveryServicesVaultResource v in subClient.GetRecoveryServicesVaults().GetAllAsync())
+            {
+                results.Add(new {
+                    name = v.Data.Name,
+                    resourceGroup = v.Data.ResourceGroupName,
+                    subscriptionId = sub.Data.SubscriptionId,
+                    location = v.Data.Location.ToString()
+                });
+            }
+        }
 
         var resp = req.CreateResponse(HttpStatusCode.OK);
-        await resp.WriteAsJsonAsync(rows);
+        await resp.WriteAsJsonAsync(results);
         return resp;
     }
 }
