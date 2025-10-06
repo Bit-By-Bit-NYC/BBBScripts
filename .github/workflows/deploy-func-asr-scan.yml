@@ -1,0 +1,60 @@
+name: Deploy func-asr-scan
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "apps/func-asr-scan/**"
+      - ".github/workflows/deploy-func-asr-scan.yml"
+  workflow_dispatch:  # allow manual trigger
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+env:
+  APP_NAME: func-asr-scan
+  APP_RG: rg-asr-scan
+  DOTNET_VERSION: "8.0.x"
+  PROJECT_PATH: apps/func-asr-scan/src
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: dotnet restore
+
+      - name: Build (Release)
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: dotnet build --configuration Release
+
+      - name: Publish (zip)
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: dotnet publish --configuration Release -o published
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id:  ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure Function
+        uses: azure/functions-action@v1
+        with:
+          app-name: ${{ env.APP_NAME }}
+          package: ${{ env.PROJECT_PATH }}/published
