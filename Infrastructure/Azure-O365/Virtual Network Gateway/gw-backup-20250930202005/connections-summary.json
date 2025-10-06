@@ -1,0 +1,15 @@
+[
+  {
+    "name": "vcn-gacc1",
+    "connectionType": "IPsec",
+    "status": "Connected",
+    "enableBgp": false,
+    "usePolicyBasedTrafficSelectors": false,
+    "remote": {
+      "type": "LocalNetworkGateway",
+      "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/localNetworkGateways/lng-gacc-office",
+      "peerAddress": null
+    },
+    "ipsecPolicies": []
+  }
+]

@@ -1,0 +1,69 @@
+{
+  "activeActive": false,
+  "allowRemoteVnetTraffic": false,
+  "allowVirtualWanTraffic": false,
+  "bgpSettings": {
+    "asn": 65515,
+    "bgpPeeringAddress": "10.7.0.254",
+    "bgpPeeringAddresses": [
+      {
+        "customBgpIpAddresses": [],
+        "defaultBgpIpAddresses": [
+          "10.7.0.254"
+        ],
+        "ipconfigurationId": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/virtualNetworkGateways/vng-gacc1/ipConfigurations/default",
+        "tunnelIpAddresses": [
+          "23.98.145.231"
+        ]
+      }
+    ],
+    "peerWeight": 0
+  },
+  "disableIPSecReplayProtection": false,
+  "enableBgp": false,
+  "enableBgpRouteTranslationForNat": false,
+  "enableHighBandwidthVpnGateway": false,
+  "enablePrivateIpAddress": false,
+  "etag": "W/\"35ae958f-70a0-4508-8b95-a9ff5b12f9a6\"",
+  "gatewayType": "Vpn",
+  "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/virtualNetworkGateways/vng-gacc1",
+  "ipConfigurations": [
+    {
+      "etag": "W/\"35ae958f-70a0-4508-8b95-a9ff5b12f9a6\"",
+      "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/virtualNetworkGateways/vng-gacc1/ipConfigurations/default",
+      "name": "default",
+      "privateIPAllocationMethod": "Dynamic",
+      "provisioningState": "Succeeded",
+      "publicIPAddress": {
+        "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/publicIPAddresses/pip-vng-gacc",
+        "resourceGroup": "rsg-gacc-production"
+      },
+      "resourceGroup": "rsg-gacc-production",
+      "subnet": {
+        "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/virtualNetworks/vn-gacc-prod/subnets/GatewaySubnet",
+        "resourceGroup": "rsg-gacc-production"
+      }
+    }
+  ],
+  "location": "southcentralus",
+  "name": "vng-gacc1",
+  "natRules": [],
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rsg-gacc-production",
+  "resourceGuid": "cc7f3b1d-23ed-4e02-8d12-472e414ce2d3",
+  "sku": {
+    "capacity": 2,
+    "name": "Basic",
+    "tier": "Basic"
+  },
+  "tags": {},
+  "type": "Microsoft.Network/virtualNetworkGateways",
+  "virtualNetworkGatewayMigrationStatus": {
+    "errorMessage": "",
+    "phase": "None",
+    "state": "None"
+  },
+  "virtualNetworkGatewayPolicyGroups": [],
+  "vpnGatewayGeneration": "Generation1",
+  "vpnType": "RouteBased"
+}

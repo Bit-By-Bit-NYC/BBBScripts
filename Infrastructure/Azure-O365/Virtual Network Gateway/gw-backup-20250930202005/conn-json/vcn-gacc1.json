@@ -1,0 +1,35 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "Connected",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 0,
+  "egressBytesTransferred": 384787188974,
+  "enableBgp": false,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"7f60ff19-2b77-4d44-8a44-2ea25c886c53\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/connections/vcn-gacc1",
+  "ingressBytesTransferred": 264094494790,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/localNetworkGateways/lng-gacc-office",
+    "resourceGroup": "rsg-gacc-production"
+  },
+  "location": "southcentralus",
+  "name": "vcn-gacc1",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rsg-gacc-production",
+  "resourceGuid": "88252875-c9ad-410a-a2a1-44d80a668fb1",
+  "routingWeight": 0,
+  "trafficSelectorPolicies": [],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/virtualNetworkGateways/vng-gacc1",
+    "resourceGroup": "rsg-gacc-production"
+  }
+}

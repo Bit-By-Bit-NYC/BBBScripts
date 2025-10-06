@@ -1,0 +1,36 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "Connected",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 45,
+  "egressBytesTransferred": 693807,
+  "enableBgp": true,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"d7f155d8-80f0-4a72-89c8-7caf8e1df56e\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/connections/cn-hq-timewarner",
+  "ingressBytesTransferred": 671084,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/rg-nadap-networking/providers/Microsoft.Network/localNetworkGateways/lng-lexington-time-warner",
+    "resourceGroup": "rg-nadap-networking"
+  },
+  "location": "eastus",
+  "name": "cn-hq-timewarner",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "Nadap-1",
+  "resourceGuid": "737af556-0957-4943-8767-5197daed17c1",
+  "routingWeight": 0,
+  "tags": {},
+  "trafficSelectorPolicies": [],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1",
+    "resourceGroup": "Nadap-1"
+  }
+}

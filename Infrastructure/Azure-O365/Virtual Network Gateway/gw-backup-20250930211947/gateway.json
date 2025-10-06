@@ -1,0 +1,135 @@
+{
+  "activeActive": true,
+  "adminState": "",
+  "allowRemoteVnetTraffic": false,
+  "allowVirtualWanTraffic": false,
+  "bgpSettings": {
+    "asn": 65515,
+    "bgpPeeringAddress": "10.26.0.4,10.26.0.5",
+    "bgpPeeringAddresses": [
+      {
+        "customBgpIpAddresses": [],
+        "defaultBgpIpAddresses": [
+          "10.26.0.4"
+        ],
+        "ipconfigurationId": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1/ipConfigurations/default",
+        "tunnelIpAddresses": [
+          "52.170.156.78"
+        ]
+      },
+      {
+        "customBgpIpAddresses": [],
+        "defaultBgpIpAddresses": [
+          "10.26.0.5"
+        ],
+        "ipconfigurationId": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1/ipConfigurations/ActiveActive",
+        "tunnelIpAddresses": [
+          "4.246.219.90"
+        ]
+      }
+    ],
+    "peerWeight": 0
+  },
+  "customRoutes": {
+    "addressPrefixes": []
+  },
+  "disableIPSecReplayProtection": false,
+  "enableBgp": true,
+  "enableBgpRouteTranslationForNat": false,
+  "enableHighBandwidthVpnGateway": false,
+  "enablePrivateIpAddress": false,
+  "etag": "W/\"0e4c94b4-8d26-4945-a080-f1198982dffe\"",
+  "gatewayType": "Vpn",
+  "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1",
+  "ipConfigurations": [
+    {
+      "etag": "W/\"0e4c94b4-8d26-4945-a080-f1198982dffe\"",
+      "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1/ipConfigurations/default",
+      "name": "default",
+      "privateIPAllocationMethod": "Dynamic",
+      "provisioningState": "Succeeded",
+      "publicIPAddress": {
+        "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/publicIPAddresses/vng-public-1",
+        "resourceGroup": "Nadap-1"
+      },
+      "resourceGroup": "Nadap-1",
+      "subnet": {
+        "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworks/azure_10_26/subnets/GatewaySubnet",
+        "resourceGroup": "Nadap-1"
+      }
+    },
+    {
+      "etag": "W/\"0e4c94b4-8d26-4945-a080-f1198982dffe\"",
+      "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1/ipConfigurations/ActiveActive",
+      "name": "ActiveActive",
+      "privateIPAllocationMethod": "Dynamic",
+      "provisioningState": "Succeeded",
+      "publicIPAddress": {
+        "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/publicIPAddresses/vng-public4",
+        "resourceGroup": "Nadap-1"
+      },
+      "resourceGroup": "Nadap-1",
+      "subnet": {
+        "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworks/azure_10_26/subnets/GatewaySubnet",
+        "resourceGroup": "Nadap-1"
+      }
+    },
+    {
+      "etag": "W/\"0e4c94b4-8d26-4945-a080-f1198982dffe\"",
+      "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1/ipConfigurations/PointToSiteIpConfig",
+      "name": "PointToSiteIpConfig",
+      "privateIPAllocationMethod": "Dynamic",
+      "provisioningState": "Succeeded",
+      "publicIPAddress": {
+        "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/publicIPAddresses/vng-public3",
+        "resourceGroup": "Nadap-1"
+      },
+      "resourceGroup": "Nadap-1",
+      "subnet": {
+        "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworks/azure_10_26/subnets/GatewaySubnet",
+        "resourceGroup": "Nadap-1"
+      }
+    }
+  ],
+  "location": "eastus",
+  "name": "vng-1",
+  "natRules": [],
+  "provisioningState": "Succeeded",
+  "resourceGroup": "Nadap-1",
+  "resourceGuid": "2b88e41f-aa10-4003-84dd-c3f2af120fbc",
+  "sku": {
+    "capacity": 2,
+    "name": "VpnGw1AZ",
+    "tier": "VpnGw1AZ"
+  },
+  "type": "Microsoft.Network/virtualNetworkGateways",
+  "virtualNetworkGatewayMigrationStatus": {
+    "errorMessage": "",
+    "phase": "CommitSucceeded",
+    "state": "Succeeded"
+  },
+  "virtualNetworkGatewayPolicyGroups": [],
+  "vpnClientConfiguration": {
+    "aadAudience": "41b23e61-6c1e-4545-b367-cd054e0ed4b4",
+    "aadIssuer": "https://sts.windows.net/c9a9205c-6616-4671-b76d-1b6480304d5f/",
+    "aadTenant": "https://login.microsoftonline.com/c9a9205c-6616-4671-b76d-1b6480304d5f",
+    "radiusServers": [],
+    "vngClientConnectionConfigurations": [],
+    "vpnAuthenticationTypes": [
+      "AAD"
+    ],
+    "vpnClientAddressPool": {
+      "addressPrefixes": [
+        "10.99.0.0/20"
+      ]
+    },
+    "vpnClientIpsecPolicies": [],
+    "vpnClientProtocols": [
+      "OpenVPN"
+    ],
+    "vpnClientRevokedCertificates": [],
+    "vpnClientRootCertificates": []
+  },
+  "vpnGatewayGeneration": "Generation2",
+  "vpnType": "RouteBased"
+}

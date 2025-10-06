@@ -1,14 +1,15 @@
 # Azure VNet Gateway cutover configuration
 # -----------------------------------------
 # Resource group that contains the Virtual Network Gateway
-RG=rg-az-audiocodes1
+RG=Nadap-1
+
 
 # Name of the Virtual Network Gateway whose public IP you are replacing
-GW=vgw-az-audiocodes1
+GW=vng-1
 
 # Name of the *new* Public IP resource to attach to the gateway after recreation
 # (If it doesn’t already exist, the script will create it as Standard/Static)
-NEW_PIP=pip-vng-audiocodes-1
+NEW_PIP=
 
 # If the gateway is Active-Active, uncomment and set a second Public IP name
-NEW_PIP2=pip-vng-audiocodes-2
+NEW_PIP2=

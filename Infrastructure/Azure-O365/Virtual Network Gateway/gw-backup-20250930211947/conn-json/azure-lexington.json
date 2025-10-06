@@ -1,0 +1,44 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "Connected",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 45,
+  "egressBytesTransferred": 4661877448,
+  "enableBgp": true,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"fb9744a5-7c7e-421e-b567-e6d7d0050617\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/connections/azure-lexington",
+  "ingressBytesTransferred": 18717213514,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/localNetworkGateways/Fortigate-Lexington",
+    "resourceGroup": "Nadap-1"
+  },
+  "location": "eastus",
+  "name": "azure-lexington",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "Nadap-1",
+  "resourceGuid": "33d2a3bb-d4fa-4e24-8bce-f230d503d579",
+  "routingWeight": 0,
+  "trafficSelectorPolicies": [],
+  "tunnelConnectionStatus": [
+    {
+      "connectionStatus": "Connected",
+      "egressBytesTransferred": 4660441160,
+      "ingressBytesTransferred": 18715611951,
+      "lastConnectionEstablishedUtcTime": "2025-09-30T07:13:43.5188578Z",
+      "tunnel": "azure-lexington_52.170.156.78"
+    }
+  ],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1",
+    "resourceGroup": "Nadap-1"
+  }
+}

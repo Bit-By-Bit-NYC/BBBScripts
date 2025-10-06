@@ -1,0 +1,12 @@
+{
+  "name": "vng-1",
+  "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1",
+  "location": "eastus",
+  "sku": "VpnGw1AZ",
+  "gatewayType": "Vpn",
+  "vpnType": "RouteBased",
+  "activeActive": true,
+  "asn": 65515,
+  "vnetId": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworks/azure_10_26",
+  "subnetId": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworks/azure_10_26/subnets/GatewaySubnet"
+}

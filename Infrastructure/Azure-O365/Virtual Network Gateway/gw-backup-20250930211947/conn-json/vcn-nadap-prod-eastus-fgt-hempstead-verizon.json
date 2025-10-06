@@ -1,0 +1,45 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "Connected",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 45,
+  "egressBytesTransferred": 274969299,
+  "enableBgp": false,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"acdd8a8b-bb23-41d8-a3ea-6e8ef750e2d8\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/connections/vcn-nadap-prod-eastus-fgt-hempstead-verizon",
+  "ingressBytesTransferred": 113169410,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/localNetworkGateways/lng-nadap-prod-eastus-001",
+    "resourceGroup": "Nadap-1"
+  },
+  "location": "eastus",
+  "name": "vcn-nadap-prod-eastus-fgt-hempstead-verizon",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "Nadap-1",
+  "resourceGuid": "16ce4138-6809-4b1a-bd1d-8a41621dbd27",
+  "routingWeight": 0,
+  "tags": {},
+  "trafficSelectorPolicies": [],
+  "tunnelConnectionStatus": [
+    {
+      "connectionStatus": "Connected",
+      "egressBytesTransferred": 274142900,
+      "ingressBytesTransferred": 112863691,
+      "lastConnectionEstablishedUtcTime": "2025-09-30T07:13:43.5188578Z",
+      "tunnel": "vcn-nadap-prod-eastus-fgt-hempstead-verizon_52.170.156.78"
+    }
+  ],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/virtualNetworkGateways/vng-1",
+    "resourceGroup": "Nadap-1"
+  }
+}

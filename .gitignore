@@ -5,3 +5,16 @@ last_status.json
 Infrastructure/Azure-O365/AzureSiteRecovery/state/last_status.json
 Infrastructure/Azure-O365/AzureSiteRecovery/state/last_status_config-hyperv.txt.json
 Infrastructure/Azure-O365/AzureSiteRecovery/state/last_status_config.txt.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-azuremigrate-cdratelined744rsvault.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-jan2022migrate0271vault.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-rsv-asr-drtnjr2-westus2.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-rsv-desktop.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-rsv-fax-dr.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-rsv-gerbertours-westus2.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-rsv-russogould-wus2.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-rsv-seniorcare-eastus2.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-sbc-vault1-20200120.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-site-recovery-vault-westus.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-config-site-recovery-vault-westus2.json
+Infrastructure/Azure-O365/AzureSiteRecovery/asr-configs/asr-vault-scan-summary.json
+Infrastructure/Azure-O365/AzureSiteRecovery/state/last_status_config.txt.json

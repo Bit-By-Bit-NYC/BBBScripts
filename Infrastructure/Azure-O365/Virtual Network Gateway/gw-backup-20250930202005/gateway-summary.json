@@ -1,0 +1,12 @@
+{
+  "name": "vng-gacc1",
+  "id": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/virtualNetworkGateways/vng-gacc1",
+  "location": "southcentralus",
+  "sku": "Basic",
+  "gatewayType": "Vpn",
+  "vpnType": "RouteBased",
+  "activeActive": false,
+  "asn": 65515,
+  "vnetId": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/virtualNetworks/vn-gacc-prod",
+  "subnetId": "/subscriptions/3003e8a7-a250-4c96-ba6f-55cbd219a122/resourceGroups/rsg-gacc-production/providers/Microsoft.Network/virtualNetworks/vn-gacc-prod/subnets/GatewaySubnet"
+}

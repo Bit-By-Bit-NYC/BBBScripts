@@ -1,0 +1,41 @@
+[
+  {
+    "name": "azure-lexington",
+    "connectionType": "IPsec",
+    "status": "Connected",
+    "enableBgp": true,
+    "usePolicyBasedTrafficSelectors": false,
+    "remote": {
+      "type": "LocalNetworkGateway",
+      "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/localNetworkGateways/Fortigate-Lexington",
+      "peerAddress": null
+    },
+    "ipsecPolicies": []
+  },
+  {
+    "name": "cn-hq-timewarner",
+    "connectionType": "IPsec",
+    "status": "Connected",
+    "enableBgp": true,
+    "usePolicyBasedTrafficSelectors": false,
+    "remote": {
+      "type": "LocalNetworkGateway",
+      "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/rg-nadap-networking/providers/Microsoft.Network/localNetworkGateways/lng-lexington-time-warner",
+      "peerAddress": null
+    },
+    "ipsecPolicies": []
+  },
+  {
+    "name": "vcn-nadap-prod-eastus-fgt-hempstead-verizon",
+    "connectionType": "IPsec",
+    "status": "Connected",
+    "enableBgp": false,
+    "usePolicyBasedTrafficSelectors": false,
+    "remote": {
+      "type": "LocalNetworkGateway",
+      "id": "/subscriptions/07ce40b4-3bdf-4183-9f25-d40007dab3b6/resourceGroups/Nadap-1/providers/Microsoft.Network/localNetworkGateways/lng-nadap-prod-eastus-001",
+      "peerAddress": null
+    },
+    "ipsecPolicies": []
+  }
+]
