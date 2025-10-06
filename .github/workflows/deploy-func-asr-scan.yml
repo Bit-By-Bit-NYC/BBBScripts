@@ -16,7 +16,8 @@ env:
   APP_NAME: func-asr-scan
   APP_RG: rg-asr-scan
   DOTNET_VERSION: "8.0.x"
-  PROJECT_PATH: apps/func-asr-scan/src
+  PROJECT_DIR: apps/func-asr-scan/src              # <— folder
+  PROJECT_FILE: apps/func-asr-scan/src/func-asr-scan.csproj  # <— file
   AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
   AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
