@@ -1,0 +1,28 @@
+[
+  {
+    "name": "cn-vng-hq-spectrum",
+    "connectionType": "IPsec",
+    "status": "Unknown",
+    "enableBgp": true,
+    "usePolicyBasedTrafficSelectors": false,
+    "remote": {
+      "type": "LocalNetworkGateway",
+      "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/localNetworkGateways/lng-ldg-hq-spectrum",
+      "peerAddress": null
+    },
+    "ipsecPolicies": []
+  },
+  {
+    "name": "vst-ldg-hq",
+    "connectionType": "IPsec",
+    "status": "Connected",
+    "enableBgp": true,
+    "usePolicyBasedTrafficSelectors": false,
+    "remote": {
+      "type": "LocalNetworkGateway",
+      "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/localNetworkGateways/lng-ldg-hq-pilot",
+      "peerAddress": null
+    },
+    "ipsecPolicies": []
+  }
+]

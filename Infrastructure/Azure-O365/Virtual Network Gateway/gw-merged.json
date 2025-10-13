@@ -1,0 +1,117 @@
+{
+  "activeActive": true,
+  "allowRemoteVnetTraffic": false,
+  "allowVirtualWanTraffic": false,
+  "bgpSettings": {
+    "asn": 65515,
+    "bgpPeeringAddress": "10.6.0.5,10.6.0.4",
+    "bgpPeeringAddresses": [
+      {
+        "customBgpIpAddresses": [],
+        "defaultBgpIpAddresses": [
+          "10.6.0.5"
+        ],
+        "ipconfigurationId": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east/ipConfigurations/vnetGatewayConfig0",
+        "tunnelIpAddresses": [
+          "23.96.31.114"
+        ]
+      },
+      {
+        "customBgpIpAddresses": [],
+        "defaultBgpIpAddresses": [
+          "10.6.0.4"
+        ],
+        "ipconfigurationId": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east/ipConfigurations/vnetGatewayConfig1",
+        "tunnelIpAddresses": [
+          "172.178.66.216"
+        ]
+      }
+    ],
+    "peerWeight": 0
+  },
+  "disableIPSecReplayProtection": false,
+  "enableBgp": true,
+  "enableBgpRouteTranslationForNat": false,
+  "enableHighBandwidthVpnGateway": false,
+  "enablePrivateIpAddress": false,
+  "etag": "W/\"3ef2e211-6698-4deb-a11c-861b9daa26a0\"",
+  "gatewayType": "Vpn",
+  "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east",
+  "ipConfigurations": [
+    {
+      "etag": "W/\"3ef2e211-6698-4deb-a11c-861b9daa26a0\"",
+      "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east/ipConfigurations/vnetGatewayConfig0",
+      "name": "vnetGatewayConfig0",
+      "privateIPAllocationMethod": "Dynamic",
+      "provisioningState": "Succeeded",
+      "publicIPAddress": {
+        "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/publicIPAddresses/pip-vng-ldg-east",
+        "resourceGroup": "rg-ldg1"
+      },
+      "resourceGroup": "rg-ldg1",
+      "subnet": {
+        "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworks/vn-10-6/subnets/GatewaySubnet",
+        "resourceGroup": "rg-ldg1"
+      }
+    },
+    {
+      "etag": "W/\"3ef2e211-6698-4deb-a11c-861b9daa26a0\"",
+      "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east/ipConfigurations/vnetGatewayConfig1",
+      "name": "vnetGatewayConfig1",
+      "privateIPAllocationMethod": "Dynamic",
+      "provisioningState": "Succeeded",
+      "publicIPAddress": {
+        "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/publicIPAddresses/pip-ldg-vng-002",
+        "resourceGroup": "rg-ldg1"
+      },
+      "resourceGroup": "rg-ldg1",
+      "subnet": {
+        "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworks/vn-10-6/subnets/GatewaySubnet",
+        "resourceGroup": "rg-ldg1"
+      }
+    }
+  ],
+  "location": "eastus",
+  "name": "vng-ldg-east",
+  "natRules": [],
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rg-ldg1",
+  "resourceGuid": "56efa624-e2d9-440c-84df-450f829ddd23",
+  "sku": {
+    "capacity": 2,
+    "name": "VpnGw1",
+    "tier": "VpnGw1"
+  },
+  "type": "Microsoft.Network/virtualNetworkGateways",
+  "virtualNetworkGatewayMigrationStatus": {
+    "errorMessage": "",
+    "phase": "None",
+    "state": "None"
+  },
+  "virtualNetworkGatewayPolicyGroups": [],
+  "vpnGatewayGeneration": "Generation1",
+  "vpnType": "RouteBased",
+  "properties": {
+    "vpnClientConfiguration": {
+      "aadAudience": "41b23e61-6c1e-4545-b367-cd054e0ed4b4",
+      "aadIssuer": "https://sts.windows.net/fea3c70c-2f9c-41e4-8510-eb755b5794e6/",
+      "aadTenant": "https://login.microsoftonline.com/fea3c70c-2f9c-41e4-8510-eb755b5794e6",
+      "radiusServers": [],
+      "vngClientConnectionConfigurations": [],
+      "vpnAuthenticationTypes": [
+        "AAD"
+      ],
+      "vpnClientAddressPool": {
+        "addressPrefixes": [
+          "10.200.1.0/24"
+        ]
+      },
+      "vpnClientIpsecPolicies": [],
+      "vpnClientProtocols": [
+        "OpenVPN"
+      ],
+      "vpnClientRevokedCertificates": [],
+      "vpnClientRootCertificates": []
+    }
+  }
+}

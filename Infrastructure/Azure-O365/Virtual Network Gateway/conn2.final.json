@@ -1,0 +1,15 @@
+{
+  "location": "eastus",
+  "properties": {
+    "connectionType": "IPsec",
+    "virtualNetworkGateway1": {
+      "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east"
+    },
+    "localNetworkGateway2": {
+      "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/localNetworkGateways/lng-ldg-hq-pilot"
+    },
+    "sharedKey": "asfdjkljlfsd@#$@#$fsfsgh",
+    "enableBgp": true,
+    "usePolicyBasedTrafficSelectors": false
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "vng-ldg-east",
+  "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east",
+  "location": "eastus",
+  "sku": "VpnGw1AZ",
+  "gatewayType": "Vpn",
+  "vpnType": "RouteBased",
+  "activeActive": true,
+  "asn": 65515,
+  "vnetId": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworks/vn-10-6",
+  "subnetId": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworks/vn-10-6/subnets/GatewaySubnet"
+}

@@ -1,0 +1,38 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "Unknown",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 45,
+  "egressBytesTransferred": 0,
+  "enableBgp": true,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"6fb220fb-537f-423a-aad5-1c878625236f\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/connections/cn-vng-hq-spectrum",
+  "ingressBytesTransferred": 0,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/localNetworkGateways/lng-ldg-hq-spectrum",
+    "resourceGroup": "rg-ldg1"
+  },
+  "location": "eastus",
+  "name": "cn-vng-hq-spectrum",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rg-ldg1",
+  "resourceGuid": "8c285235-aaf4-477c-a40d-480c544850bf",
+  "routingWeight": 0,
+  "tags": {
+    "bbb-ticket": "1020714"
+  },
+  "trafficSelectorPolicies": [],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east",
+    "resourceGroup": "rg-ldg1"
+  }
+}

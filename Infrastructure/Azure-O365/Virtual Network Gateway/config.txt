@@ -1,11 +1,11 @@
 # Azure VNet Gateway cutover configuration
 # -----------------------------------------
 # Resource group that contains the Virtual Network Gateway
-RG=Nadap-1
+RG=rg-ldg1
 
 
 # Name of the Virtual Network Gateway whose public IP you are replacing
-GW=vng-1
+GW=vng-ldg-east
 
 # Name of the *new* Public IP resource to attach to the gateway after recreation
 # (If it doesn’t already exist, the script will create it as Standard/Static)
@@ -13,3 +13,11 @@ NEW_PIP=
 
 # If the gateway is Active-Active, uncomment and set a second Public IP name
 NEW_PIP2=
+# Force a specific subscription (optional)
+SUBSCRIPTION_ID="f5abe388-0610-4e4e-91c3-30c07f05f834"
+
+# If true, script will call `az account set --subscription SUBSCRIPTION_ID` at start
+FORCE_SUBSCRIPTION="true"
+
+# Default behavior for Option 2/3: try to reuse existing Public IPs found on the gateway
+REUSE_EXISTING_PIPS="true"

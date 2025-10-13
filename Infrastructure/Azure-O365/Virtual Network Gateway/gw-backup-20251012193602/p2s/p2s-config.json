@@ -1,0 +1,21 @@
+{
+  "aadAudience": "41b23e61-6c1e-4545-b367-cd054e0ed4b4",
+  "aadIssuer": "https://sts.windows.net/fea3c70c-2f9c-41e4-8510-eb755b5794e6/",
+  "aadTenant": "https://login.microsoftonline.com/fea3c70c-2f9c-41e4-8510-eb755b5794e6",
+  "radiusServers": [],
+  "vngClientConnectionConfigurations": [],
+  "vpnAuthenticationTypes": [
+    "AAD"
+  ],
+  "vpnClientAddressPool": {
+    "addressPrefixes": [
+      "10.200.1.0/24"
+    ]
+  },
+  "vpnClientIpsecPolicies": [],
+  "vpnClientProtocols": [
+    "OpenVPN"
+  ],
+  "vpnClientRevokedCertificates": [],
+  "vpnClientRootCertificates": []
+}

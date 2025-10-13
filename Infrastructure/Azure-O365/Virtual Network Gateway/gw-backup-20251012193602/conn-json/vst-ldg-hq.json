@@ -1,0 +1,44 @@
+{
+  "connectionMode": "Default",
+  "connectionProtocol": "IKEv2",
+  "connectionStatus": "Connected",
+  "connectionType": "IPsec",
+  "dpdTimeoutSeconds": 45,
+  "egressBytesTransferred": 1276881011,
+  "enableBgp": true,
+  "enablePrivateLinkFastPath": false,
+  "etag": "W/\"b0b5f68f-838d-4973-986e-8c0e85cc0b69\"",
+  "expressRouteGatewayBypass": false,
+  "gatewayCustomBgpIpAddresses": [],
+  "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/connections/vst-ldg-hq",
+  "ingressBytesTransferred": 286233279,
+  "ipsecPolicies": [],
+  "localNetworkGateway2": {
+    "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/localNetworkGateways/lng-ldg-hq-pilot",
+    "resourceGroup": "rg-ldg1"
+  },
+  "location": "eastus",
+  "name": "vst-ldg-hq",
+  "provisioningState": "Succeeded",
+  "resourceGroup": "rg-ldg1",
+  "resourceGuid": "7377c41b-cefc-49bc-a051-ea3accd8cdcf",
+  "routingWeight": 0,
+  "trafficSelectorPolicies": [],
+  "tunnelConnectionStatus": [
+    {
+      "connectionStatus": "Connected",
+      "egressBytesTransferred": 1276881011,
+      "ingressBytesTransferred": 286233279,
+      "lastConnectionEstablishedUtcTime": "2025-10-09T13:41:44.4313182Z",
+      "tunnel": "vst-ldg-hq_172.178.66.216"
+    }
+  ],
+  "tunnelProperties": [],
+  "type": "Microsoft.Network/connections",
+  "useLocalAzureIpAddress": false,
+  "usePolicyBasedTrafficSelectors": false,
+  "virtualNetworkGateway1": {
+    "id": "/subscriptions/f5abe388-0610-4e4e-91c3-30c07f05f834/resourceGroups/rg-ldg1/providers/Microsoft.Network/virtualNetworkGateways/vng-ldg-east",
+    "resourceGroup": "rg-ldg1"
+  }
+}

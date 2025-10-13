@@ -1,0 +1,11 @@
+{
+  "location": "eastus",
+  "properties": {
+    "connectionType": "IPsec",
+    "virtualNetworkGateway1": { "id": "__GW_ID__" },
+    "localNetworkGateway2":   { "id": "__LNG_ID__" },
+    "sharedKey": "__PSK__",
+    "enableBgp": true,
+    "usePolicyBasedTrafficSelectors": false
+  }
+}
