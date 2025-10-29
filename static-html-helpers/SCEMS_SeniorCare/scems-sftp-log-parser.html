@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SFTP Login Summary (Multi-File)</title>
+<style>
+body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:#eaf0ff;margin:24px}
+h1{font-size:24px;margin-bottom:8px}
+.panel{background:#111a30;border:1px solid #203057;border-radius:14px;padding:16px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+input[type=file],button{font-size:14px;padding:8px 12px;border-radius:10px;border:1px solid #284070;background:#0e1831;color:#eaf0ff}
+button{background:#6aa2ff;color:#071427;border:0;font-weight:600}
+button:disabled{opacity:.6}
+.stats{margin-top:10px;color:#a7b6d8}
+table{width:100%;border-collapse:collapse;margin-top:14px}
+th,td{border-bottom:1px solid #22345a;padding:8px 6px;text-align:left;vertical-align:top}
+th{color:#cfe1ff}
+.pill{background:#142447;border:1px solid #1e2d54;padding:2px 8px;border-radius:999px;display:inline-block;margin:2px 4px 2px 0;font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<h1>SFTP Login Summary (Multiple XMLs)</h1>
+<p>Select one or more XML files (you can skip the concatenated file).  
+Success = “Completed password Authentication” or “User logged in”.  
+It reports username, distinct IPs, counts, and first/last login times.</p>
+
+<div class="panel">
+  <div class="row">
+    <input id="files" type="file" accept=".xml,.txt" multiple />
+    <button id="go" disabled>Process</button>
+    <button id="dl" disabled>Download CSV</button>
+  </div>
+  <div id="meta" class="stats"></div>
+  <div id="out"></div>
+</div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const fileEl = $('#files'), goBtn = $('#go'), dlBtn = $('#dl'), meta = $('#meta'), out = $('#out');
+let csvData=null;
+
+fileEl.addEventListener('change',()=>{goBtn.disabled=!fileEl.files.length;dlBtn.disabled=true;out.innerHTML='';meta.textContent='';csvData=null;});
+
+goBtn.addEventListener('click',async()=>{
+  const files=[...fileEl.files]; if(!files.length)return;
+  goBtn.disabled=true; dlBtn.disabled=true; out.innerHTML=''; meta.textContent='Processing...';
+  const summary={};
+  let totalFiles=0, totalEntries=0, successes=0;
+
+  for(const f of files){
+    meta.textContent=`Reading ${f.name}...`;
+    const text=await f.text();
+    const xml=new DOMParser().parseFromString(text,'application/xml');
+    const entries=[...xml.getElementsByTagName('entry')];
+    totalEntries+=entries.length;
+    for(const e of entries){
+      const desc=(e.querySelector('description')?.textContent||'').toLowerCase();
+      if(!desc.match(/completed password authentication|user logged in/)) continue;
+      const user=(e.querySelector('user')?.textContent||'(unknown)').trim().toLowerCase();
+      const ip=((e.querySelector('cliconnaddr')?.textContent||'').match(/\d+\.\d+\.\d+\.\d+/)||[''])[0];
+      const ts=e.querySelector('log_time')?.textContent?.trim();
+      successes++;
+      if(!summary[user]) summary[user]={total:0,ips:{},first:ts,last:ts};
+      const s=summary[user];
+      s.total++;
+      if(ip) s.ips[ip]=(s.ips[ip]||0)+1;
+      if(ts){
+        if(!s.first||ts<s.first)s.first=ts;
+        if(!s.last||ts>s.last)s.last=ts;
+      }
+    }
+    totalFiles++;
+  }
+
+  meta.innerHTML=`Processed <b>${totalFiles}</b> files, <b>${totalEntries.toLocaleString()}</b> entries, <b>${successes.toLocaleString()}</b> successful logins.`;
+  render(summary);
+  csvData=toCSV(summary);
+  dlBtn.disabled=false;
+  goBtn.disabled=false;
+});
+
+dlBtn.addEventListener('click',()=>{
+  if(!csvData)return;
+  const blob=new Blob([csvData],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='sftp-login-summary.csv';
+  document.body.appendChild(a);a.click();a.remove();
+});
+
+function render(summary){
+  const users=Object.keys(summary).sort();
+  if(!users.length){out.innerHTML='<p>No successful logins found.</p>';return;}
+  let html='<table><thead><tr><th>User</th><th>Distinct IPs</th><th>IP → Count</th><th>Total</th><th>First Login</th><th>Last Login</th></tr></thead><tbody>';
+  for(const u of users){
+    const s=summary[u];
+    const ips=Object.keys(s.ips).sort();
+    const pills=ips.map(ip=>`<span class="pill">${ip}</span>`).join(' ')||'n/a';
+    const counts=Object.entries(s.ips).map(([ip,c])=>`<span class="pill">${ip}=${c}</span>`).join(' ')||'n/a';
+    html+=`<tr><td><b>${u}</b></td><td>${pills}</td><td>${counts}</td><td>${s.total}</td><td>${s.first||''}</td><td>${s.last||''}</td></tr>`;
+  }
+  html+='</tbody></table>';
+  out.innerHTML=html;
+}
+
+function toCSV(summary){
+  const rows=[['User','DistinctIPs','IP_Counts','Total','FirstLogin','LastLogin']];
+  for(const [u,s] of Object.entries(summary).sort((a,b)=>a[0].localeCompare(b[0]))){
+    const ips=Object.keys(s.ips).join(' ');
+    const counts=Object.entries(s.ips).map(([ip,c])=>`${ip}=${c}`).join(' ');
+    rows.push([u,ips,counts,s.total,s.first||'',s.last||'']);
+  }
+  return rows.map(r=>r.map(v=>/[",\r\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v).join(',')).join('\r\n');
+}
+})();
+</script>
+</body>
+</html>
