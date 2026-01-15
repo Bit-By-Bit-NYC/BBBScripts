@@ -66,11 +66,12 @@ if ($existingCsvFiles -or (Test-Path $checkpointFile)) {
     
     Write-Host "`nYou can:" -ForegroundColor White
     Write-Host "  [U] UPDATE - Just update user assignments (fast, ~10-20 minutes)" -ForegroundColor Green
+    Write-Host "  [P] PERMISSIONS - Audit app permissions and assess risk (fast, ~15-25 minutes)" -ForegroundColor Magenta
     Write-Host "  [F] FULL - Run complete analysis with sign-in data (slow, ~12 hours)" -ForegroundColor Yellow
     Write-Host "  [R] RESUME - Resume from checkpoint (if available)" -ForegroundColor Cyan
     Write-Host "  [Q] QUIT - Exit script" -ForegroundColor Red
     
-    $choice = Read-Host "`nYour choice (U/F/R/Q)"
+    $choice = Read-Host "`nYour choice (U/P/F/R/Q)"
     
     switch ($choice.ToUpper()) {
         'U' {
@@ -78,6 +79,33 @@ if ($existingCsvFiles -or (Test-Path $checkpointFile)) {
             $updateMode = $true
             
             # Load existing data
+            if ($existingCsvFiles) {
+                Write-Host "Loading data from CSV: $($existingCsvFiles.FullName)" -ForegroundColor Cyan
+                $existingResults = Import-Csv $existingCsvFiles.FullName
+                Write-Host "Loaded $($existingResults.Count) existing records" -ForegroundColor Green
+            }
+            elseif (Test-Path $checkpointFile) {
+                Write-Host "Loading data from checkpoint..." -ForegroundColor Cyan
+                $checkpoint = Get-Content $checkpointFile -Raw | ConvertFrom-Json
+                $existingResults = $checkpoint.Results
+                Write-Host "Loaded $($existingResults.Count) existing records" -ForegroundColor Green
+            }
+        }
+        'P' {
+            Write-Host "`n✓ PERMISSIONS MODE - Will audit app permissions and assess risk" -ForegroundColor Magenta
+            $permissionsMode = $true
+            
+            # Load permission risk database
+            $scriptPath = $PSScriptRoot
+            $riskDbPath = Join-Path $scriptPath "PermissionRiskDatabase.ps1"
+            
+            # Check if risk database exists, if not create it inline
+            if (-not (Test-Path $riskDbPath)) {
+                Write-Host "Loading permission risk database..." -ForegroundColor Cyan
+                # Will be loaded inline below
+            }
+            
+            # Load existing data if available
             if ($existingCsvFiles) {
                 Write-Host "Loading data from CSV: $($existingCsvFiles.FullName)" -ForegroundColor Cyan
                 $existingResults = Import-Csv $existingCsvFiles.FullName
@@ -112,7 +140,7 @@ if ($existingCsvFiles -or (Test-Path $checkpointFile)) {
 
 # Connect to Microsoft Graph
 Write-Host "`nConnecting to Microsoft Graph..." -ForegroundColor Cyan
-Connect-MgGraph -Scopes "Application.Read.All", "AuditLog.Read.All", "Directory.Read.All", "User.Read.All", "Group.Read.All" -NoWelcome
+Connect-MgGraph -Scopes "Application.Read.All", "AuditLog.Read.All", "Directory.Read.All", "User.Read.All", "Group.Read.All", "DelegatedPermissionGrant.Read.All" -NoWelcome
 
 Write-Host "Retrieving Enterprise Applications..." -ForegroundColor Cyan
 
@@ -250,6 +278,252 @@ if ($updateMode -and $existingResults) {
     Write-Host "`n✓ UPDATE COMPLETE!" -ForegroundColor Green
     Write-Host "Updated $($updatedResults.Count) applications" -ForegroundColor White
     Write-Host "Results exported to: $exportPath" -ForegroundColor Green
+    
+    # Disconnect and exit
+    Disconnect-MgGraph | Out-Null
+    Write-Host "`nDisconnected from Microsoft Graph" -ForegroundColor Cyan
+    exit
+}
+
+# Handle PERMISSIONS MODE - audit app permissions and assess risk
+if ($permissionsMode) {
+    Write-Host "`n=== PERMISSIONS MODE: Auditing App Permissions ===" -ForegroundColor Magenta
+    Write-Host "This will analyze permissions and identify security risks...`n" -ForegroundColor Green
+    
+    # Load permission risk database inline
+    . {
+        $script:PermissionRiskDatabase = @{
+            # Critical Risk
+            "Directory.ReadWrite.All" = @{ Risk = "Critical"; Reason = "Full read/write access to entire directory"; Impact = "Complete tenant compromise possible" }
+            "RoleManagement.ReadWrite.Directory" = @{ Risk = "Critical"; Reason = "Can assign admin roles including Global Admin"; Impact = "Privilege escalation to tenant admin" }
+            "Application.ReadWrite.All" = @{ Risk = "Critical"; Reason = "Can create/modify applications and add credentials"; Impact = "Backdoor creation capability" }
+            "AppRoleAssignment.ReadWrite.All" = @{ Risk = "Critical"; Reason = "Can grant any permission to any app"; Impact = "Privilege escalation for applications" }
+            "UserAuthenticationMethod.ReadWrite.All" = @{ Risk = "Critical"; Reason = "Full control over user authentication methods"; Impact = "Can disable MFA, compromise accounts" }
+            "Sites.FullControl.All" = @{ Risk = "Critical"; Reason = "Full control over all SharePoint sites"; Impact = "Complete SharePoint takeover" }
+            
+            # High Risk
+            "Mail.ReadWrite.All" = @{ Risk = "High"; Reason = "Read and modify ALL mailboxes"; Impact = "Organization-wide email compromise" }
+            "Mail.Send.All" = @{ Risk = "High"; Reason = "Send emails as any user"; Impact = "Organization-wide phishing capability" }
+            "Files.ReadWrite.All" = @{ Risk = "High"; Reason = "Read and write all files"; Impact = "Data exfiltration, ransomware potential" }
+            "Sites.ReadWrite.All" = @{ Risk = "High"; Reason = "Read and write all SharePoint sites"; Impact = "Organization-wide document compromise" }
+            "User.ReadWrite.All" = @{ Risk = "High"; Reason = "Read and update all user profiles"; Impact = "User profile manipulation" }
+            "Group.ReadWrite.All" = @{ Risk = "High"; Reason = "Read and write all groups"; Impact = "Privilege escalation via groups" }
+            "Calendars.ReadWrite.All" = @{ Risk = "High"; Reason = "Read and write all calendars"; Impact = "Organization-wide schedule access" }
+            "Mail.Read.All" = @{ Risk = "High"; Reason = "Read all mailboxes"; Impact = "Organization-wide email surveillance" }
+            
+            # Medium Risk
+            "Mail.ReadWrite" = @{ Risk = "Medium"; Reason = "Read and modify user's mailbox"; Impact = "Email data exfiltration" }
+            "Mail.Read" = @{ Risk = "Medium"; Reason = "Read user's email"; Impact = "Email content exposure" }
+            "Files.Read.All" = @{ Risk = "Medium"; Reason = "Read all files user can access"; Impact = "Document data exfiltration" }
+            "Directory.Read.All" = @{ Risk = "Medium"; Reason = "Read entire directory"; Impact = "Complete org visibility" }
+            "User.Read.All" = @{ Risk = "Medium"; Reason = "Read all user profiles"; Impact = "Directory enumeration" }
+            "Calendars.Read.All" = @{ Risk = "Medium"; Reason = "Read all calendars"; Impact = "Schedule visibility" }
+            
+            # Low Risk
+            "User.Read" = @{ Risk = "Low"; Reason = "Read signed-in user's profile"; Impact = "Basic profile information" }
+            "email" = @{ Risk = "Low"; Reason = "Read user's email address"; Impact = "Email address only" }
+            "profile" = @{ Risk = "Low"; Reason = "Read user's basic profile"; Impact = "Basic profile information" }
+            "openid" = @{ Risk = "Low"; Reason = "Sign in user"; Impact = "Authentication only" }
+            "offline_access" = @{ Risk = "Low"; Reason = "Maintain access to data"; Impact = "Refresh token capability" }
+        }
+        
+        function Get-PermissionRisk {
+            param([string]$Permission)
+            
+            if ($script:PermissionRiskDatabase.ContainsKey($Permission)) {
+                return $script:PermissionRiskDatabase[$Permission]
+            }
+            
+            # Pattern matching
+            if ($Permission -like "*.ReadWrite.All") {
+                return @{ Risk = "High"; Reason = "Tenant-wide write access"; Impact = "Broad modification capability" }
+            }
+            if ($Permission -like "*.FullControl.All") {
+                return @{ Risk = "Critical"; Reason = "Full control over resource"; Impact = "Complete resource control" }
+            }
+            if ($Permission -like "*.Read.All") {
+                return @{ Risk = "Medium"; Reason = "Tenant-wide read access"; Impact = "Broad data visibility" }
+            }
+            
+            return @{ Risk = "Unknown"; Reason = "Permission not in database"; Impact = "Review manually" }
+        }
+    }
+    
+    $permCounter = 0
+    $permResults = @()
+    
+    foreach ($app in $enterpriseApps) {
+        $permCounter++
+        $percentComplete = [math]::Round(($permCounter / $enterpriseApps.Count) * 100, 1)
+        
+        Write-Progress -Activity "Auditing Permissions" -Status "Processing $($app.DisplayName) ($permCounter of $($enterpriseApps.Count))" `
+            -PercentComplete $percentComplete
+        
+        $timestamp = Get-Date -Format "HH:mm:ss"
+        Write-Host "[$timestamp] [$permCounter/$($enterpriseApps.Count)] Auditing: " -NoNewline -ForegroundColor Gray
+        Write-Host $app.DisplayName -ForegroundColor Cyan
+        
+        # Get OAuth2 Permission Grants (Delegated Permissions)
+        Write-Host "  → Checking delegated permissions..." -NoNewline -ForegroundColor DarkGray
+        $delegatedPermissions = @()
+        $delegatedPermsRaw = Get-MgServicePrincipalOauth2PermissionGrant -ServicePrincipalId $app.Id -ErrorAction SilentlyContinue
+        
+        foreach ($grant in $delegatedPermsRaw) {
+            if ($grant.Scope) {
+                $scopes = $grant.Scope.Split(' ') | Where-Object { $_ }
+                foreach ($scope in $scopes) {
+                    $risk = Get-PermissionRisk -Permission $scope
+                    $delegatedPermissions += [PSCustomObject]@{
+                        Permission = $scope
+                        Type = "Delegated"
+                        Risk = $risk.Risk
+                        ConsentType = $grant.ConsentType
+                    }
+                }
+            }
+        }
+        
+        Write-Host " $($delegatedPermissions.Count) found" -ForegroundColor White
+        
+        # Get App Role Assignments (Application Permissions)
+        Write-Host "  → Checking application permissions..." -NoNewline -ForegroundColor DarkGray
+        $applicationPermissions = @()
+        $appRoleAssignments = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $app.Id -ErrorAction SilentlyContinue
+        
+        foreach ($assignment in $appRoleAssignments) {
+            # Get the resource service principal to find the role name
+            try {
+                $resourceSP = Get-MgServicePrincipal -ServicePrincipalId $assignment.ResourceId -ErrorAction SilentlyContinue
+                if ($resourceSP) {
+                    $appRole = $resourceSP.AppRoles | Where-Object { $_.Id -eq $assignment.AppRoleId }
+                    if ($appRole) {
+                        $risk = Get-PermissionRisk -Permission $appRole.Value
+                        $applicationPermissions += [PSCustomObject]@{
+                            Permission = $appRole.Value
+                            Type = "Application"
+                            Risk = $risk.Risk
+                            ResourceName = $resourceSP.DisplayName
+                        }
+                    }
+                }
+            }
+            catch {
+                # Skip if we can't resolve
+            }
+        }
+        
+        Write-Host " $($applicationPermissions.Count) found" -ForegroundColor White
+        
+        # Combine all permissions
+        $allPermissions = $delegatedPermissions + $applicationPermissions
+        
+        # Calculate risk score
+        $riskCounts = @{
+            Critical = ($allPermissions | Where-Object { $_.Risk -eq "Critical" }).Count
+            High = ($allPermissions | Where-Object { $_.Risk -eq "High" }).Count
+            Medium = ($allPermissions | Where-Object { $_.Risk -eq "Medium" }).Count
+            Low = ($allPermissions | Where-Object { $_.Risk -eq "Low" }).Count
+            Unknown = ($allPermissions | Where-Object { $_.Risk -eq "Unknown" }).Count
+        }
+        
+        # Determine overall risk level
+        $overallRisk = if ($riskCounts.Critical -gt 0) { "Critical" }
+            elseif ($riskCounts.High -gt 0) { "High" }
+            elseif ($riskCounts.Medium -gt 0) { "Medium" }
+            elseif ($riskCounts.Low -gt 0) { "Low" }
+            else { "None" }
+        
+        # Create comma-separated list of critical/high permissions
+        $criticalPermsList = ($allPermissions | Where-Object { $_.Risk -eq "Critical" } | Select-Object -ExpandProperty Permission) -join ", "
+        $highPermsList = ($allPermissions | Where-Object { $_.Risk -eq "High" } | Select-Object -ExpandProperty Permission) -join ", "
+        $allPermsList = ($allPermissions | Select-Object -ExpandProperty Permission) -join "; "
+        
+        Write-Host "  → Risk Assessment: " -NoNewline -ForegroundColor DarkGray
+        switch ($overallRisk) {
+            "Critical" { Write-Host $overallRisk -ForegroundColor Red -NoNewline; Write-Host " ($($riskCounts.Critical) critical)" -ForegroundColor Red }
+            "High" { Write-Host $overallRisk -ForegroundColor DarkRed -NoNewline; Write-Host " ($($riskCounts.High) high)" -ForegroundColor DarkRed }
+            "Medium" { Write-Host $overallRisk -ForegroundColor Yellow }
+            "Low" { Write-Host $overallRisk -ForegroundColor Green }
+            default { Write-Host $overallRisk -ForegroundColor Gray }
+        }
+        
+        if ($criticalPermsList) {
+            Write-Host "    └─ CRITICAL: $criticalPermsList" -ForegroundColor Red
+        }
+        if ($highPermsList) {
+            Write-Host "    └─ HIGH: $highPermsList" -ForegroundColor DarkRed
+        }
+        
+        Write-Host ""
+        
+        # Get existing record if available
+        $existingRecord = if ($existingResults) {
+            $existingResults | Where-Object { $_.ApplicationId -eq $app.AppId } | Select-Object -First 1
+        } else { $null }
+        
+        # Create permission record
+        $permRecord = [PSCustomObject]@{
+            DisplayName = $app.DisplayName
+            ApplicationId = $app.AppId
+            ObjectId = $app.Id
+            TotalPermissions = $allPermissions.Count
+            DelegatedPermissions = $delegatedPermissions.Count
+            ApplicationPermissions = $applicationPermissions.Count
+            OverallRisk = $overallRisk
+            CriticalPermissions = $riskCounts.Critical
+            HighPermissions = $riskCounts.High
+            MediumPermissions = $riskCounts.Medium
+            LowPermissions = $riskCounts.Low
+            CriticalPermissionsList = $criticalPermsList
+            HighPermissionsList = $highPermsList
+            AllPermissionsList = $allPermsList
+            # Preserve existing data if available
+            AssignedUsers = if ($existingRecord) { $existingRecord.AssignedUsers } else { "N/A" }
+            AssignedUsersList = if ($existingRecord) { $existingRecord.AssignedUsersList } else { "N/A" }
+            UserEngagement = if ($existingRecord) { $existingRecord.UserEngagement } else { "Unknown" }
+            LastInteractiveSignIn = if ($existingRecord) { $existingRecord.LastInteractiveSignIn } else { "N/A" }
+        }
+        
+        $permResults += $permRecord
+    }
+    
+    Write-Progress -Activity "Auditing Permissions" -Completed
+    
+    # Display risk summary
+    Write-Host "`n=== RISK SUMMARY ===" -ForegroundColor Magenta
+    $criticalApps = ($permResults | Where-Object { $_.OverallRisk -eq "Critical" }).Count
+    $highApps = ($permResults | Where-Object { $_.OverallRisk -eq "High" }).Count
+    $mediumApps = ($permResults | Where-Object { $_.OverallRisk -eq "Medium" }).Count
+    $lowApps = ($permResults | Where-Object { $_.OverallRisk -eq "Low" }).Count
+    $noneApps = ($permResults | Where-Object { $_.OverallRisk -eq "None" }).Count
+    
+    Write-Host "Total Applications Audited: $($permResults.Count)" -ForegroundColor White
+    Write-Host "Critical Risk: $criticalApps" -ForegroundColor Red
+    Write-Host "High Risk: $highApps" -ForegroundColor DarkRed
+    Write-Host "Medium Risk: $mediumApps" -ForegroundColor Yellow
+    Write-Host "Low Risk: $lowApps" -ForegroundColor Green
+    Write-Host "No Permissions: $noneApps" -ForegroundColor Gray
+    
+    # Export permissions report
+    $permExportPath = Join-Path $PSScriptRoot "EnterpriseAppPermissions_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+    $permResults | Export-Csv -Path $permExportPath -NoTypeInformation
+    
+    Write-Host "`n✓ PERMISSIONS AUDIT COMPLETE!" -ForegroundColor Green
+    Write-Host "Results exported to: $permExportPath" -ForegroundColor Green
+    
+    # Show top risky apps
+    Write-Host "`n=== TOP 10 RISKIEST APPLICATIONS ===" -ForegroundColor Magenta
+    $permResults | Sort-Object @{Expression={
+        switch ($_.OverallRisk) {
+            "Critical" { 4 }
+            "High" { 3 }
+            "Medium" { 2 }
+            "Low" { 1 }
+            default { 0 }
+        }
+    }}, CriticalPermissions, HighPermissions -Descending | 
+    Select-Object -First 10 | 
+    Format-Table DisplayName, OverallRisk, CriticalPermissions, HighPermissions, TotalPermissions -AutoSize
     
     # Disconnect and exit
     Disconnect-MgGraph | Out-Null
