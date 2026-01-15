@@ -160,6 +160,7 @@ echo "$storage_accounts" | jq -c '.[]' | while read -r sa; do
             fi
             
             # Get share usage (used capacity)
+            # Try method 1: az storage share stats (fast but may return 0)
             share_stats=$(az storage share stats \
                 --name "$share_name" \
                 --account-name "$sa_name" \
@@ -167,12 +168,39 @@ echo "$storage_accounts" | jq -c '.[]' | while read -r sa; do
                 2>/dev/null)
             
             if [ $? -eq 0 ] && [ ! -z "$share_stats" ]; then
-                # Try to parse usage in GB directly
-                usage_gb=$(echo "$share_stats" | grep -oP '\d+' | head -1)
-                if [ -z "$usage_gb" ]; then
-                    usage_gb="0"
-                fi
+                # az storage share stats returns usage in GB as a simple number
+                # Extract just the number using sed (Mac-compatible)
+                usage_gb=$(echo "$share_stats" | sed -n 's/[^0-9]*\([0-9][0-9]*\).*/\1/p' | head -1)
             else
+                usage_gb=""
+            fi
+            
+            # If stats returned 0 or failed, try method 2: Azure Monitor metrics
+            if [ -z "$usage_gb" ] || [ "$usage_gb" == "0" ]; then
+                # Get subscription ID for the metrics query
+                sub_id=$(az account show --query id -o tsv)
+                
+                # Try to get file share capacity via metrics (last 1 hour)
+                capacity_bytes=$(az monitor metrics list \
+                    --resource "/subscriptions/$sub_id/resourceGroups/$rg/providers/Microsoft.Storage/storageAccounts/$sa_name/fileServices/default" \
+                    --metric "FileCapacity" \
+                    --start-time $(date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null) \
+                    --end-time $(date -u '+%Y-%m-%dT%H:%M:%SZ') \
+                    --interval PT1H \
+                    --aggregation Average \
+                    --filter "FileShare eq '$share_name'" \
+                    --query 'value[0].timeseries[0].data[-1].average' -o tsv 2>/dev/null)
+                
+                if [ ! -z "$capacity_bytes" ] && [ "$capacity_bytes" != "null" ] && [ "$capacity_bytes" != "" ]; then
+                    # Convert bytes to GB
+                    usage_gb=$(awk "BEGIN {printf \"%.2f\", $capacity_bytes / 1073741824}")
+                    # Round to nearest integer for display
+                    usage_gb=$(printf "%.0f" "$usage_gb")
+                fi
+            fi
+            
+            # Final fallback
+            if [ -z "$usage_gb" ]; then
                 usage_gb="0"
             fi
             
