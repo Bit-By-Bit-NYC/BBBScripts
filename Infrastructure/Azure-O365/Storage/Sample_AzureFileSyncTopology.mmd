@@ -1,0 +1,44 @@
+graph TB
+    classDef syncService fill:#0078D4,stroke:#004578,stroke-width:2px,color:#fff
+    classDef syncGroup fill:#50E6FF,stroke:#0078D4,stroke-width:2px,color:#000
+    classDef cloudEndpoint fill:#00BCF2,stroke:#0078D4,stroke-width:2px,color:#000
+    classDef serverEndpoint fill:#FFB900,stroke:#D83B01,stroke-width:2px,color:#000
+    classDef storageAccount fill:#7FBA00,stroke:#498205,stroke-width:2px,color:#000
+    
+    SS_ProdSync["Storage Sync Service<br/>ProdSync"]:::syncService
+    SG_Documents_0["Sync Group<br/>Documents"]:::syncGroup
+    SS_ProdSync --> SG_Documents_0
+    SA_stprodfiles01{{"Storage Account<br/>stprodfiles01"}}:::storageAccount
+    CE_stprodfiles01_documents_0[("Cloud Endpoint<br/>File Share: documents")]:::cloudEndpoint
+    SG_Documents_0 --> CE_stprodfiles01_documents_0
+    CE_stprodfiles01_documents_0 -.-> SA_stprodfiles01
+    SE_FileServer01_D__Shares_Documents_0[/"Server Endpoint<br/>FileServer01<br/>D:\Shares\Documents"\]:::serverEndpoint
+    SG_Documents_0 --> SE_FileServer01_D__Shares_Documents_0
+    SE_FileServer02_E__Data_Documents_0[/"Server Endpoint<br/>FileServer02<br/>E:\Data\Documents"\]:::serverEndpoint
+    SG_Documents_0 --> SE_FileServer02_E__Data_Documents_0
+    
+    SG_Archives_1["Sync Group<br/>Archives"]:::syncGroup
+    SS_ProdSync --> SG_Archives_1
+    CE_stprodfiles01_archives_1[("Cloud Endpoint<br/>File Share: archives")]:::cloudEndpoint
+    SG_Archives_1 --> CE_stprodfiles01_archives_1
+    CE_stprodfiles01_archives_1 -.-> SA_stprodfiles01
+    SE_ArchiveServer_F__Archives_1[/"Server Endpoint<br/>ArchiveServer<br/>F:\Archives"\]:::serverEndpoint
+    SG_Archives_1 --> SE_ArchiveServer_F__Archives_1
+
+    SS_DevSync["Storage Sync Service<br/>DevSync"]:::syncService
+    SG_TestData_2["Sync Group<br/>TestData"]:::syncGroup
+    SS_DevSync --> SG_TestData_2
+    SA_stdevfiles01{{"Storage Account<br/>stdevfiles01"}}:::storageAccount
+    CE_stdevfiles01_testdata_2[("Cloud Endpoint<br/>File Share: testdata")]:::cloudEndpoint
+    SG_TestData_2 --> CE_stdevfiles01_testdata_2
+    CE_stdevfiles01_testdata_2 -.-> SA_stdevfiles01
+    SE_DevServer01_C__TestData_2[/"Server Endpoint<br/>DevServer01<br/>C:\TestData"\]:::serverEndpoint
+    SG_TestData_2 --> SE_DevServer01_C__TestData_2
+
+    subgraph Legend
+        L1[Storage Sync Service]:::syncService
+        L2[Sync Group]:::syncGroup
+        L3[Cloud Endpoint]:::cloudEndpoint
+        L4[Server Endpoint]:::serverEndpoint
+        L5{{Storage Account}}:::storageAccount
+    end
