@@ -202,33 +202,106 @@ foreach ($subscription in $subscriptions) {
     # Get all Recovery Services Vaults for backup checking
     Write-Host "  - Retrieving Recovery Services Vaults..." -ForegroundColor Gray
     $backupVaults = Get-AzRecoveryServicesVault
+    Write-Host "    Found $($backupVaults.Count) Recovery Services Vault(s)" -ForegroundColor Gray
     
     # Build backup lookup table
     $backupLookup = @{}
     foreach ($vault in $backupVaults) {
         try {
+            Write-Host "    Checking vault: $($vault.Name)" -ForegroundColor Gray
             Set-AzRecoveryServicesVaultContext -Vault $vault
-            $backupItems = Get-AzRecoveryServicesBackupItem -WorkloadType AzureFiles -ErrorAction SilentlyContinue
             
-            foreach ($item in $backupItems) {
-                # Extract storage account and file share name from the backup item
-                $key = "$($item.ContainerName)/$($item.Name)"
-                $backupLookup[$key] = @{
-                    VaultName = $vault.Name
-                    ProtectionStatus = $item.ProtectionStatus
-                    LastBackupTime = $item.LastBackupTime
-                    ProtectionState = $item.ProtectionState
+            # Get containers first to check if there are any backups
+            $containers = Get-AzRecoveryServicesBackupContainer -ContainerType AzureStorage -ErrorAction SilentlyContinue
+            
+            if ($containers) {
+                Write-Host "      Found $($containers.Count) backup container(s)" -ForegroundColor Gray
+                foreach ($container in $containers) {
+                    $backupItems = Get-AzRecoveryServicesBackupItem -Container $container -WorkloadType AzureFiles -ErrorAction SilentlyContinue
+                    
+                    if ($backupItems) {
+                        Write-Host "        Container: $($container.FriendlyName) has $($backupItems.Count) backup item(s)" -ForegroundColor Gray
+                    }
+                    
+                    foreach ($item in $backupItems) {
+                        # Extract storage account name from container
+                        $containerParts = $container.Name -split ';'
+                        $storageAccountName = if ($containerParts.Count -ge 4) { $containerParts[3] } else { $container.FriendlyName }
+                        
+                        # DEBUG: Show all available properties
+                        Write-Host "          DEBUG - Backup Item Properties:" -ForegroundColor Cyan
+                        Write-Host "            Name: $($item.Name)" -ForegroundColor Gray
+                        Write-Host "            FriendlyName: $($item.FriendlyName)" -ForegroundColor Gray
+                        Write-Host "            ContainerName: $($item.ContainerName)" -ForegroundColor Gray
+                        Write-Host "            WorkloadType: $($item.WorkloadType)" -ForegroundColor Gray
+                        if ($item.SourceResourceId) {
+                            Write-Host "            SourceResourceId: $($item.SourceResourceId)" -ForegroundColor Gray
+                        } else {
+                            Write-Host "            SourceResourceId: <null>" -ForegroundColor Gray
+                        }
+                        
+                        # Get actual file share name
+                        $fileShareName = $null
+                        
+                        # Try FriendlyName (format: storageaccount;filesharename)
+                        if ($item.FriendlyName -and $item.FriendlyName -match ';') {
+                            $friendlyParts = $item.FriendlyName -split ';'
+                            if ($friendlyParts.Count -ge 2) {
+                                $fileShareName = $friendlyParts[1]
+                                Write-Host "            Extracted from FriendlyName: $fileShareName" -ForegroundColor Green
+                            }
+                        }
+                        
+                        # Try SourceResourceId
+                        if (-not $fileShareName -and $item.SourceResourceId) {
+                            if ($item.SourceResourceId -match '/fileshares/([^/]+)$') {
+                                $fileShareName = $matches[1]
+                                Write-Host "            Extracted from SourceResourceId: $fileShareName" -ForegroundColor Green
+                            }
+                        }
+                        
+                        # Skip if we couldn't determine
+                        if (-not $fileShareName) {
+                            Write-Host "          Could not determine file share name" -ForegroundColor Yellow
+                            continue
+                        }
+                        
+                        Write-Host "          Backup item: $storageAccountName/$fileShareName (Status: $($item.ProtectionStatus))" -ForegroundColor Gray
+                        
+                        $key1 = "$storageAccountName/$fileShareName"
+                        $key2 = "$($item.ContainerName)/$fileShareName"
+                        $key3 = "$storageAccountName\$fileShareName"
+                        
+                        $backupData = @{
+                            VaultName = $vault.Name
+                            ProtectionStatus = $item.ProtectionStatus
+                            LastBackupTime = $item.LastBackupTime
+                            ProtectionState = $item.ProtectionState
+                            StorageAccountName = $storageAccountName
+                            FileShareName = $fileShareName
+                        }
+                        
+                        $backupLookup[$key1] = $backupData
+                        $backupLookup[$key2] = $backupData
+                        $backupLookup[$key3] = $backupData
+                    }
                 }
+            } else {
+                Write-Host "      No backup containers found in this vault" -ForegroundColor Gray
             }
         }
         catch {
-            Write-Warning "Could not retrieve backup items from vault: $($vault.Name)"
+            Write-Warning "Could not retrieve backup items from vault: $($vault.Name) - $($_.Exception.Message)"
         }
     }
+    
+    $uniqueBackups = ($backupLookup.Values | Select-Object -Property StorageAccountName, FileShareName -Unique | Measure-Object).Count
+    Write-Host "    Total unique backed up file share(s): $uniqueBackups" -ForegroundColor Green
     
     # Get all Storage Sync Services for sync checking
     Write-Host "  - Retrieving Storage Sync Services..." -ForegroundColor Gray
     $syncServices = Get-AzStorageSyncService -ErrorAction SilentlyContinue
+    Write-Host "    Found $($syncServices.Count) Storage Sync Service(s)" -ForegroundColor Gray
     
     # Build sync lookup table and topology data
     $syncLookup = @{}
@@ -266,12 +339,70 @@ foreach ($subscription in $subscriptions) {
                 
                 # Build server endpoint details
                 $serverEndpointDetails = @()
+                
+                # Get all registered servers for this sync service
+                $registeredServers = @()
+                try {
+                    Write-Host "      DEBUG - Getting registered servers..." -ForegroundColor Cyan
+                    $registeredServers = Get-AzStorageSyncServer -ParentObject $syncService -ErrorAction SilentlyContinue
+                    Write-Host "      Found $($registeredServers.Count) registered server(s)" -ForegroundColor Gray
+                } catch {
+                    Write-Warning "Could not retrieve registered servers for sync service: $($syncService.StorageSyncServiceName)"
+                }
+                
                 foreach ($serverEndpoint in $serverEndpoints) {
-                    # Get registered server details
-                    $registeredServer = Get-AzStorageSyncServer -ParentObject $syncService | Where-Object { $_.ServerId -eq $serverEndpoint.ServerId }
+                    Write-Host "      DEBUG - Server Endpoint Properties:" -ForegroundColor Cyan
+                    Write-Host "        ServerId: $($serverEndpoint.ServerId)" -ForegroundColor Gray
+                    Write-Host "        ServerResourceId: $($serverEndpoint.ServerResourceId)" -ForegroundColor Gray
+                    Write-Host "        ServerLocalPath: $($serverEndpoint.ServerLocalPath)" -ForegroundColor Gray
+                    
+                    # Try to find the registered server by ServerId
+                    $registeredServer = $registeredServers | Where-Object { $_.ServerId -eq $serverEndpoint.ServerId } | Select-Object -First 1
+                    
+                    if ($registeredServer) {
+                        Write-Host "      DEBUG - Registered Server Properties:" -ForegroundColor Cyan
+                        Write-Host "        ServerId: $($registeredServer.ServerId)" -ForegroundColor Gray
+                        Write-Host "        Name: $($registeredServer.Name)" -ForegroundColor Gray
+                        Write-Host "        FriendlyName: $($registeredServer.FriendlyName)" -ForegroundColor Gray
+                        Write-Host "        ServerName: $($registeredServer.ServerName)" -ForegroundColor Gray
+                        Write-Host "        ServerResourceId: $($registeredServer.ServerResourceId)" -ForegroundColor Gray
+                        
+                        # Try to get all properties
+                        $allProps = $registeredServer | Get-Member -MemberType Properties | Select-Object -ExpandProperty Name
+                        Write-Host "        All Properties: $($allProps -join ', ')" -ForegroundColor Gray
+                    } else {
+                        Write-Host "      No matching registered server found" -ForegroundColor Yellow
+                    }
+                    
+                    # Determine server name
+                    $serverName = $null
+                    
+                    if ($registeredServer) {
+                        if ($registeredServer.ServerName) {
+                            $serverName = $registeredServer.ServerName
+                        } elseif ($registeredServer.FriendlyName) {
+                            $serverName = $registeredServer.FriendlyName
+                        } elseif ($registeredServer.Name) {
+                            $serverName = $registeredServer.Name
+                        } elseif ($registeredServer.ServerResourceId) {
+                            $parts = $registeredServer.ServerResourceId -split '/'
+                            $serverName = $parts[-1]
+                        }
+                    }
+                    
+                    if (-not $serverName -and $serverEndpoint.ServerResourceId) {
+                        $parts = $serverEndpoint.ServerResourceId -split '/'
+                        $serverName = $parts[-1]
+                    }
+                    
+                    if (-not $serverName) {
+                        $serverName = $serverEndpoint.ServerId
+                    }
+                    
+                    Write-Host "      Final Server Name: $serverName" -ForegroundColor Green
                     
                     $serverEndpointDetails += @{
-                        ServerName = if ($registeredServer) { $registeredServer.FriendlyName } else { "Unknown Server" }
+                        ServerName = $serverName
                         ServerId = $serverEndpoint.ServerId
                         ServerLocalPath = $serverEndpoint.ServerLocalPath
                         CloudTiering = $serverEndpoint.CloudTiering
@@ -305,8 +436,60 @@ foreach ($subscription in $subscriptions) {
         Write-Host "    - Checking storage account: $($sa.StorageAccountName)" -ForegroundColor Gray
         
         try {
+            # Check if storage account has restrictive network rules
+            $hasNetworkRestrictions = $false
+            if ($sa.NetworkRuleSet -and $sa.NetworkRuleSet.DefaultAction -eq "Deny") {
+                $hasNetworkRestrictions = $true
+                Write-Host "      WARNING: Storage account has network restrictions (DefaultAction: Deny)" -ForegroundColor Yellow
+            }
+            
             # Get file shares
-            $shares = Get-AzStorageShare -Context $sa.Context -ErrorAction SilentlyContinue
+            $shares = $null
+            try {
+                $shares = Get-AzStorageShare -Context $sa.Context -ErrorAction Stop | Where-Object { $_.IsSnapshot -eq $false }
+            }
+            catch {
+                if ($_.Exception.Message -match "AuthorizationFailure|AuthenticationFailed|network|firewall|403|blocked") {
+                    Write-Host "      ERROR: Cannot access file shares - Network/Firewall restriction" -ForegroundColor Red
+                    Write-Host "      This storage account's firewall is blocking access from your current IP" -ForegroundColor Red
+                    Write-Host "      Storage Account: $($sa.StorageAccountName) may have file shares that are not in this report" -ForegroundColor Red
+                    
+                    # Try to get file share info from sync topology if available
+                    $syncSharesForThisAccount = $syncLookup.Keys | Where-Object { $_ -like "$($sa.StorageAccountName)/*" }
+                    if ($syncSharesForThisAccount) {
+                        Write-Host "      Found in Sync Topology:" -ForegroundColor Yellow
+                        foreach ($syncKey in $syncSharesForThisAccount) {
+                            $parts = $syncKey -split '/'
+                            $shareName = $parts[1]
+                            Write-Host "        - File Share: $shareName (from Sync data)" -ForegroundColor Yellow
+                            
+                            # Add to report with limited info
+                            $reportItem = [PSCustomObject]@{
+                                SubscriptionName = $subscription.Name
+                                SubscriptionId = $subscription.Id
+                                ResourceGroup = $sa.ResourceGroupName
+                                StorageAccountName = $sa.StorageAccountName
+                                FileShareName = $shareName
+                                Location = $sa.Location
+                                Tier = $sa.Sku.Tier
+                                QuotaGB = "Unknown"
+                                UsageGB = "Restricted"
+                                BackupEnabled = if ($backupLookup["$($sa.StorageAccountName)/$shareName"]) { "Yes" } else { "Unknown" }
+                                BackupVault = if ($backupLookup["$($sa.StorageAccountName)/$shareName"]) { $backupLookup["$($sa.StorageAccountName)/$shareName"].VaultName } else { "Unknown" }
+                                BackupStatus = if ($backupLookup["$($sa.StorageAccountName)/$shareName"]) { $backupLookup["$($sa.StorageAccountName)/$shareName"].ProtectionStatus } else { "Network Restricted" }
+                                LastBackupTime = if ($backupLookup["$($sa.StorageAccountName)/$shareName"]) { $backupLookup["$($sa.StorageAccountName)/$shareName"].LastBackupTime } else { "N/A" }
+                                SyncEnabled = "Yes"
+                                SyncServiceName = $syncLookup["$($sa.StorageAccountName)/$shareName"].SyncServiceName
+                                SyncGroupName = $syncLookup["$($sa.StorageAccountName)/$shareName"].SyncGroupName
+                                SyncStatus = $syncLookup["$($sa.StorageAccountName)/$shareName"].ProvisioningState
+                            }
+                            $report += $reportItem
+                        }
+                    }
+                    continue
+                }
+                throw
+            }
             
             if ($shares) {
                 foreach ($share in $shares) {
@@ -318,8 +501,30 @@ foreach ($subscription in $subscriptions) {
                     $syncKey = "$($sa.StorageAccountName)/$($share.Name)"
                     $syncInfo = $syncLookup[$syncKey]
                     
-                    # Get share properties
-                    $shareQuota = $share.Properties.Quota
+                    # Get share properties and usage
+                    $shareQuota = if ($share.Quota) { $share.Quota } elseif ($share.Properties.Quota) { $share.Properties.Quota } else { 0 }
+                    
+                    # Get actual usage by getting share stats
+                    $shareUsageGB = 0
+                    try {
+                        $shareStats = $share.ShareClient.GetStatistics()
+                        if ($shareStats -and $shareStats.Value) {
+                            $shareUsageGB = [math]::Round($shareStats.Value.ShareUsageInBytes / 1GB, 2)
+                        }
+                    }
+                    catch {
+                        # If stats fail, try alternative method
+                        try {
+                            $shareUsageBytes = $share.ShareClient.GetProperties().Value.Quota
+                            if ($shareUsageBytes) {
+                                $shareUsageGB = [math]::Round($shareUsageBytes / 1GB, 2)
+                            }
+                        }
+                        catch {
+                            # Stats not available
+                            $shareUsageGB = "N/A"
+                        }
+                    }
                     
                     # Create report object
                     $reportItem = [PSCustomObject]@{
@@ -331,6 +536,7 @@ foreach ($subscription in $subscriptions) {
                         Location = $sa.Location
                         Tier = $sa.Sku.Tier
                         QuotaGB = $shareQuota
+                        UsageGB = $shareUsageGB
                         BackupEnabled = if ($backupInfo) { "Yes" } else { "No" }
                         BackupVault = if ($backupInfo) { $backupInfo.VaultName } else { "N/A" }
                         BackupStatus = if ($backupInfo) { $backupInfo.ProtectionStatus } else { "Not Protected" }
@@ -470,7 +676,10 @@ $mermaidDiagram
         Write-Host "STORAGE SYNC TOPOLOGY DETAILS" -ForegroundColor Cyan
         Write-Host "============================================" -ForegroundColor Cyan
         
-        foreach ($item in $syncTopology) {
+        # Deduplicate topology by SyncService + SyncGroup
+        $uniqueTopology = $syncTopology | Group-Object -Property SyncServiceName, SyncGroupName | ForEach-Object { $_.Group | Select-Object -First 1 }
+        
+        foreach ($item in $uniqueTopology) {
             Write-Host "`nSync Service: $($item.SyncServiceName) (RG: $($item.SyncServiceResourceGroup))" -ForegroundColor Yellow
             Write-Host "  Sync Group: $($item.SyncGroupName)" -ForegroundColor Cyan
             

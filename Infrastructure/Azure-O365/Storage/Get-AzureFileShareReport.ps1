@@ -92,33 +92,95 @@ foreach ($subscription in $subscriptions) {
     # Get all Recovery Services Vaults for backup checking
     Write-Host "  - Retrieving Recovery Services Vaults..." -ForegroundColor Gray
     $backupVaults = Get-AzRecoveryServicesVault
+    Write-Host "    Found $($backupVaults.Count) Recovery Services Vault(s)" -ForegroundColor Gray
     
     # Build backup lookup table
     $backupLookup = @{}
     foreach ($vault in $backupVaults) {
         try {
+            Write-Host "    Checking vault: $($vault.Name)" -ForegroundColor Gray
             Set-AzRecoveryServicesVaultContext -Vault $vault
-            $backupItems = Get-AzRecoveryServicesBackupItem -WorkloadType AzureFiles -ErrorAction SilentlyContinue
             
-            foreach ($item in $backupItems) {
-                # Extract storage account and file share name from the backup item
-                $key = "$($item.ContainerName)/$($item.Name)"
-                $backupLookup[$key] = @{
-                    VaultName = $vault.Name
-                    ProtectionStatus = $item.ProtectionStatus
-                    LastBackupTime = $item.LastBackupTime
-                    ProtectionState = $item.ProtectionState
+            # Get containers first to check if there are any backups
+            $containers = Get-AzRecoveryServicesBackupContainer -ContainerType AzureStorage -ErrorAction SilentlyContinue
+            
+            if ($containers) {
+                Write-Host "      Found $($containers.Count) backup container(s)" -ForegroundColor Gray
+                foreach ($container in $containers) {
+                    $backupItems = Get-AzRecoveryServicesBackupItem -Container $container -WorkloadType AzureFiles -ErrorAction SilentlyContinue
+                    
+                    if ($backupItems) {
+                        Write-Host "        Container: $($container.FriendlyName) has $($backupItems.Count) backup item(s)" -ForegroundColor Gray
+                    }
+                    
+                    foreach ($item in $backupItems) {
+                        # Extract storage account name from container
+                        # Container name format: StorageContainer;Storage;ResourceGroupName;StorageAccountName
+                        $containerParts = $container.Name -split ';'
+                        $storageAccountName = if ($containerParts.Count -ge 4) { $containerParts[3] } else { $container.FriendlyName }
+                        
+                        # Get actual file share name from FriendlyName or SourceResourceId
+                        $fileShareName = $null
+                        
+                        # Try to get from FriendlyName first (format: storageaccount;filesharename)
+                        if ($item.FriendlyName -and $item.FriendlyName -match ';') {
+                            $friendlyParts = $item.FriendlyName -split ';'
+                            if ($friendlyParts.Count -ge 2) {
+                                $fileShareName = $friendlyParts[1]
+                            }
+                        }
+                        
+                        # If not found, try to extract from SourceResourceId
+                        if (-not $fileShareName -and $item.SourceResourceId) {
+                            # Format: /subscriptions/.../storageAccounts/name/fileServices/default/fileshares/sharename
+                            if ($item.SourceResourceId -match '/fileshares/([^/]+)$') {
+                                $fileShareName = $matches[1]
+                            }
+                        }
+                        
+                        # Skip if we couldn't determine the file share name
+                        if (-not $fileShareName) {
+                            Write-Host "          Backup item: Could not determine file share name for $($item.Name)" -ForegroundColor Yellow
+                            continue
+                        }
+                        
+                        Write-Host "          Backup item: $storageAccountName/$fileShareName (Status: $($item.ProtectionStatus))" -ForegroundColor Gray
+                        
+                        # Create multiple keys to increase match chances
+                        $key1 = "$storageAccountName/$fileShareName"
+                        $key2 = "$($item.ContainerName)/$fileShareName"
+                        $key3 = "$storageAccountName\$fileShareName"
+                        
+                        $backupData = @{
+                            VaultName = $vault.Name
+                            ProtectionStatus = $item.ProtectionStatus
+                            LastBackupTime = $item.LastBackupTime
+                            ProtectionState = $item.ProtectionState
+                            StorageAccountName = $storageAccountName
+                            FileShareName = $fileShareName
+                        }
+                        
+                        $backupLookup[$key1] = $backupData
+                        $backupLookup[$key2] = $backupData
+                        $backupLookup[$key3] = $backupData
+                    }
                 }
+            } else {
+                Write-Host "      No backup containers found in this vault" -ForegroundColor Gray
             }
         }
         catch {
-            Write-Warning "Could not retrieve backup items from vault: $($vault.Name)"
+            Write-Warning "Could not retrieve backup items from vault: $($vault.Name) - $($_.Exception.Message)"
         }
     }
+    
+    $uniqueBackups = ($backupLookup.Values | Select-Object -Property StorageAccountName, FileShareName -Unique | Measure-Object).Count
+    Write-Host "    Total unique backed up file share(s): $uniqueBackups" -ForegroundColor Green
     
     # Get all Storage Sync Services for sync checking
     Write-Host "  - Retrieving Storage Sync Services..." -ForegroundColor Gray
     $syncServices = Get-AzStorageSyncService -ErrorAction SilentlyContinue
+    Write-Host "    Found $($syncServices.Count) Storage Sync Service(s)" -ForegroundColor Gray
     
     # Build sync lookup table
     $syncLookup = @{}
@@ -157,8 +219,8 @@ foreach ($subscription in $subscriptions) {
         Write-Host "    - Checking storage account: $($sa.StorageAccountName)" -ForegroundColor Gray
         
         try {
-            # Get file shares
-            $shares = Get-AzStorageShare -Context $sa.Context -ErrorAction SilentlyContinue
+            # Get file shares - using Get to avoid duplicates from snapshots
+            $shares = Get-AzStorageShare -Context $sa.Context -ErrorAction SilentlyContinue | Where-Object { $_.IsSnapshot -eq $false }
             
             if ($shares) {
                 foreach ($share in $shares) {
@@ -170,8 +232,30 @@ foreach ($subscription in $subscriptions) {
                     $syncKey = "$($sa.StorageAccountName)/$($share.Name)"
                     $syncInfo = $syncLookup[$syncKey]
                     
-                    # Get share properties
-                    $shareQuota = $share.Properties.Quota
+                    # Get share properties and usage
+                    $shareQuota = if ($share.Quota) { $share.Quota } elseif ($share.Properties.Quota) { $share.Properties.Quota } else { 0 }
+                    
+                    # Get actual usage by getting share stats
+                    $shareUsageGB = 0
+                    try {
+                        $shareStats = $share.ShareClient.GetStatistics()
+                        if ($shareStats -and $shareStats.Value) {
+                            $shareUsageGB = [math]::Round($shareStats.Value.ShareUsageInBytes / 1GB, 2)
+                        }
+                    }
+                    catch {
+                        # If stats fail, try alternative method
+                        try {
+                            $shareUsageBytes = $share.ShareClient.GetProperties().Value.Quota
+                            if ($shareUsageBytes) {
+                                $shareUsageGB = [math]::Round($shareUsageBytes / 1GB, 2)
+                            }
+                        }
+                        catch {
+                            # Stats not available
+                            $shareUsageGB = "N/A"
+                        }
+                    }
                     
                     # Create report object
                     $reportItem = [PSCustomObject]@{
@@ -183,6 +267,7 @@ foreach ($subscription in $subscriptions) {
                         Location = $sa.Location
                         Tier = $sa.Sku.Tier
                         QuotaGB = $shareQuota
+                        UsageGB = $shareUsageGB
                         BackupEnabled = if ($backupInfo) { "Yes" } else { "No" }
                         BackupVault = if ($backupInfo) { $backupInfo.VaultName } else { "N/A" }
                         BackupStatus = if ($backupInfo) { $backupInfo.ProtectionStatus } else { "Not Protected" }
